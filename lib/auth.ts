@@ -99,23 +99,30 @@ export async function signOut(): Promise<void> {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
+    console.log("getCurrentUser: Starting...")
+    
     // First check if we have a valid session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
     if (sessionError || !session) {
-      console.log("No valid session found:", sessionError?.message)
+      console.log("getCurrentUser: No valid session found:", sessionError?.message)
       return null
     }
+
+    console.log("getCurrentUser: Session found, user ID:", session.user?.id)
 
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !authUser) {
-      console.log("No authenticated user found:", authError?.message)
+      console.log("getCurrentUser: No authenticated user found:", authError?.message)
       return null
     }
 
+    console.log("getCurrentUser: Auth user found:", authUser.email)
+
     // In demo mode, return mock user if session exists
     if (isDemoMode) {
+      console.log("getCurrentUser: Demo mode, returning mock user")
       return {
         id: authUser.id,
         email: authUser.email || "demo@pms.com",
@@ -126,6 +133,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       }
     }
 
+    console.log("getCurrentUser: Querying users table for ID:", authUser.id)
     const { data: userData, error } = await supabase
       .from("users")
       .select("*")
@@ -133,16 +141,18 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       .single()
 
     if (error || !userData) {
-      console.log("User not found in database:", error?.message)
+      console.log("getCurrentUser: User not found in database:", error?.message)
       return null
     }
+
+    console.log("getCurrentUser: User found in database:", userData.email)
 
     if (!userData.is_active) {
-      console.log("User account is deactivated")
+      console.log("getCurrentUser: User account is deactivated")
       return null
     }
 
-    return {
+    const result = {
       id: userData.id,
       email: userData.email,
       full_name: userData.full_name,
@@ -150,8 +160,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       is_active: userData.is_active,
       last_login: userData.last_login,
     }
+    
+    console.log("getCurrentUser: Returning user:", result.email)
+    return result
   } catch (error) {
-    console.error("Get current user error:", error)
+    console.error("getCurrentUser: Error:", error)
     return null
   }
 }

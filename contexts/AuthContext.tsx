@@ -90,33 +90,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const currentUser = await getCurrentUser()
           console.log("Current user retrieved:", currentUser?.email)
-          setUser(currentUser)
-          setError(null)
-          setLoading(false) // Ensure loading is set to false after successful sign in
-          console.log("Auth state updated: user set, loading false")
+          if (currentUser) {
+            setUser(currentUser)
+            setError(null)
+            setLoading(false)
+            console.log("Auth state updated: user set, loading false")
+          } else {
+            console.log("getCurrentUser returned null, setting user to null")
+            setUser(null)
+            setLoading(false)
+          }
         } catch (error) {
           console.error("Error getting current user:", error)
           setError("Error loading user data")
           setUser(null)
-          setLoading(false) // Ensure loading is set to false even on error
+          setLoading(false)
           console.log("Auth state updated: user null, loading false (error)")
         }
       } else if (event === "SIGNED_OUT") {
+        console.log("Processing SIGNED_OUT event")
         setUser(null)
         setError(null)
-        setLoading(false) // Ensure loading is set to false after sign out
+        setLoading(false)
       } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        console.log("Processing TOKEN_REFRESHED event")
         try {
           const currentUser = await getCurrentUser()
-          setUser(currentUser)
-          setError(null)
-          setLoading(false) // Ensure loading is set to false after token refresh
+          if (currentUser) {
+            setUser(currentUser)
+            setError(null)
+            setLoading(false)
+          } else {
+            setUser(null)
+            setLoading(false)
+          }
         } catch (error) {
           console.error("Error refreshing user data:", error)
-          // If token refresh fails, sign out user
           setUser(null)
           setError("Session expired. Please login again.")
-          setLoading(false) // Ensure loading is set to false even on error
+          setLoading(false)
         }
       }
     })
