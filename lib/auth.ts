@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase, isDemoMode } from "./supabase"
 import type { User } from "./supabase"
 
 export interface AuthUser {
@@ -99,11 +99,31 @@ export async function signOut(): Promise<void> {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
+    // First check if we have a valid session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session) {
+      console.log("No valid session found:", sessionError?.message)
+      return null
+    }
+
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !authUser) {
       console.log("No authenticated user found:", authError?.message)
       return null
+    }
+
+    // In demo mode, return mock user if session exists
+    if (isDemoMode) {
+      return {
+        id: authUser.id,
+        email: authUser.email || "demo@pms.com",
+        full_name: "Demo User",
+        role: "admin",
+        is_active: true,
+        last_login: new Date().toISOString(),
+      }
     }
 
     const { data: userData, error } = await supabase

@@ -44,9 +44,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // Real Supabase authentication
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        // Real Supabase authentication - check session first
+        const { data: { session } } = await supabase.auth.getSession()
+        console.log("Initial session check:", session?.user?.id)
+        
+        if (session?.user) {
+          try {
+            const currentUser = await getCurrentUser()
+            setUser(currentUser)
+          } catch (error) {
+            console.error("Error getting current user on init:", error)
+            setUser(null)
+          }
+        } else {
+          setUser(null)
+        }
         setLoading(false)
       } catch (error) {
         console.error("Auth initialization error:", error)
@@ -69,21 +81,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error("Error getting current user:", error)
           setError("Error loading user data")
         }
-      } else if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        if (event === "SIGNED_OUT") {
-          setUser(null)
+      } else if (event === "SIGNED_OUT") {
+        setUser(null)
+        setError(null)
+      } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        try {
+          const currentUser = await getCurrentUser()
+          setUser(currentUser)
           setError(null)
-        } else if (event === "TOKEN_REFRESHED" && session?.user) {
-          try {
-            const currentUser = await getCurrentUser()
-            setUser(currentUser)
-            setError(null)
-          } catch (error) {
-            console.error("Error refreshing user data:", error)
-            // If token refresh fails, sign out user
-            setUser(null)
-            setError("Session expired. Please login again.")
-          }
+        } catch (error) {
+          console.error("Error refreshing user data:", error)
+          // If token refresh fails, sign out user
+          setUser(null)
+          setError("Session expired. Please login again.")
         }
       }
       setLoading(false)
