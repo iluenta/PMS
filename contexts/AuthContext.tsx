@@ -66,11 +66,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Start initialization immediately
     initializeAuth()
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state change:", event, session?.user?.id)
+      
+      // Don't set loading to false immediately for state changes
+      // Let the initialization handle the initial loading state
       
       if (event === "SIGNED_IN" && session?.user) {
         try {
@@ -96,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setError("Session expired. Please login again.")
         }
       }
-      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
