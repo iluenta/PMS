@@ -1,0 +1,41 @@
+# Reglas Específicas del Proyecto TuriGest
+
+## 🚨 REGLAS CRÍTICAS (SIEMPRE SEGUIR)
+
+### Commits y Testing
+- **NUNCA hacer commit sin probar primero en local**
+- **Siempre ejecutar `npm run build` antes de commit**
+- **Verificar que el servidor funciona con `npm run dev`**
+- **Probar la funcionalidad específica que se modificó**
+
+### Desarrollo
+- **Usar TypeScript para todo el código**
+- **Seguir las convenciones de Next.js 15 App Router**
+- **Usar Shadcn UI y Tailwind CSS**
+- **Implementar manejo de errores apropiado**
+
+### Supabase
+- **Usar variables de entorno para configuración**
+- **No hardcodear credenciales**
+- **Implementar Row Level Security (RLS)**
+- **Validar contra tablas existentes**
+- **la conexión a la base de datos ya existe**
+
+### Git
+- **Usar mensajes de commit descriptivos**
+- **Crear ramas feature para nuevas funcionalidades**
+- **Verificar que no hay errores antes de push**
+
+## 📋 Checklist Antes de Commit
+- [ ] Código compila sin errores (`npm run build`)
+- [ ] Servidor funciona (`npm run dev`)
+- [ ] Funcionalidad probada en local
+- [ ] Variables de entorno configuradas
+- [ ] Manejo de errores implementado
+- [ ] Tests pasan (si existen)
+
+## 🎯 Prioridades
+1. **Funcionalidad primero** - Asegurar que funciona
+2. **Testing segundo** - Probar en local
+3. **Commit tercero** - Solo después de verificar
+4. **Documentación** - Actualizar README si es necesario 

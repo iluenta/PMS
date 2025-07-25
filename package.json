@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test:build": "npm run build",
+    "test:dev": "npm run dev",
+    "precommit": "npm run build && echo '✅ Build successful - ready for commit'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -199,6 +199,22 @@ npm run start    # Producción
 npm run lint     # Linting
 ```
 
+## 🚨 Reglas de Desarrollo
+
+### Antes de Hacer Commit
+1. **Siempre probar en local primero**
+2. **Ejecutar `npm run build` para verificar compilación**
+3. **Verificar que el servidor funciona con `npm run dev`**
+4. **Probar la funcionalidad específica modificada**
+5. **Solo hacer commit después de verificar que todo funciona**
+
+### Convenciones
+- Usar TypeScript para todo el código
+- Seguir las convenciones de Next.js 15 App Router
+- Usar Shadcn UI y Tailwind CSS
+- Implementar manejo de errores apropiado
+- Usar variables de entorno para configuración
+
 ## 🤝 Contribuir
 
 1. Fork el proyecto
