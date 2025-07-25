@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js"
 // Configuration from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co"
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key"
-const persistSession = process.env.NEXT_PUBLIC_AUTH_PERSIST_SESSION === "true"
-const autoRefreshToken = process.env.NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN === "true"
+const persistSession = process.env.NEXT_PUBLIC_AUTH_PERSIST_SESSION === "true" || true
+const autoRefreshToken = process.env.NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN === "true" || true
 
 // Create client with proper configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -559,7 +559,11 @@ export const mockData = {
 }
 
 // Check if we're in demo mode (no proper Supabase configuration)
-export const isDemoMode = supabaseUrl === "https://demo.supabase.co" || supabaseAnonKey === "demo-key"
+export const isDemoMode = 
+  supabaseUrl === "https://demo.supabase.co" || 
+  supabaseAnonKey === "demo-key" ||
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 // Types
 export interface Property {

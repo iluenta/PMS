@@ -34,9 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        console.log("Initializing auth, isDemoMode:", isDemoMode)
+        
         if (isDemoMode) {
           // In demo mode, check localStorage for demo session
           const demoSession = localStorage.getItem("demo-session")
+          console.log("Demo session found:", demoSession)
           if (demoSession === "active") {
             setUser(mockUser)
           }
