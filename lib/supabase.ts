@@ -1,14 +1,21 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Use fallback values for demo purposes if environment variables are not set
+// Configuration from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co"
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key"
+const jwtExpiry = parseInt(process.env.NEXT_PUBLIC_JWT_EXPIRY || "60") // 60 seconds = 1 minute
+const persistSession = process.env.NEXT_PUBLIC_AUTH_PERSIST_SESSION === "true"
+const autoRefreshToken = process.env.NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN === "true"
 
-// Create client with error handling
+// Create client with custom JWT expiry
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession,
+    autoRefreshToken,
+    flowType: "pkce",
+    detectSessionInUrl: true,
+    // Custom JWT expiry (1 minute)
+    jwtExpiry,
   },
 })
 
@@ -727,4 +734,16 @@ export interface Channel {
   is_active: boolean
   commission_rate: number
   created_at: string
+}
+
+// User interface for the users table
+export interface User {
+  id: string
+  email: string
+  full_name: string
+  role: "admin" | "manager" | "operator" | "viewer"
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  last_login?: string
 }

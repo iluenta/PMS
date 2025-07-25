@@ -113,8 +113,17 @@ pnpm install
 ### 3. Configurar variables de entorno
 Crear archivo `.env.local`:
 ```env
+# Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-clave-anonima
+
+# JWT Configuration (1 minute expiry)
+NEXT_PUBLIC_JWT_EXPIRY=60
+NEXT_PUBLIC_AUTH_PERSIST_SESSION=true
+NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN=true
+
+# Demo Mode (set to false for production)
+NEXT_PUBLIC_DEMO_MODE=false
 ```
 
 ### 4. Ejecutar en modo desarrollo
@@ -141,7 +150,12 @@ El proyecto incluye datos mock que se cargan automáticamente cuando no hay conf
    06-seed-traveler-guide-data.sql
    07-add-availability-tables.sql
    08-seed-availability-data.sql
+   09-create-users-table.sql
    ```
+3. Configurar autenticación en Supabase:
+   - Habilitar Email/Password en Authentication > Providers
+   - Configurar JWT expiry en Authentication > Settings (60 segundos)
+   - Los usuarios se crean automáticamente al registrarse
 
 ## 📊 Funcionalidades Principales
 
@@ -156,6 +170,13 @@ El proyecto incluye datos mock que se cargan automáticamente cuando no hay conf
 - ✅ Gestión de huéspedes
 - ✅ Estados de reserva
 - ✅ Fuentes de reserva
+
+### 🔐 Autenticación y Seguridad
+- ✅ Autenticación con Supabase
+- ✅ Validación contra tabla users
+- ✅ Tokens JWT de 1 minuto
+- ✅ Roles de usuario (admin, manager, operator, viewer)
+- ✅ Row Level Security (RLS)
 
 ### Gestión Financiera
 - ✅ Configuración de comisiones
