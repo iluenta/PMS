@@ -562,8 +562,7 @@ export const mockData = {
 export const isDemoMode = 
   supabaseUrl === "https://demo.supabase.co" || 
   supabaseAnonKey === "demo-key" ||
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_DEMO_MODE === "true"
 
 // Types
 export interface Property {

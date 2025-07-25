@@ -1,10 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-export const isDemoMode =
-  process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co" ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "demo-key"
-
 export const mockData = {
   properties: [
     {
