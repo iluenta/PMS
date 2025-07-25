@@ -86,28 +86,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("Auth state change:", event, session?.user?.id)
       
       if (event === "SIGNED_IN" && session?.user) {
+        console.log("Processing SIGNED_IN event, user ID:", session.user.id)
         try {
           const currentUser = await getCurrentUser()
+          console.log("Current user retrieved:", currentUser?.email)
           setUser(currentUser)
           setError(null)
+          setLoading(false) // Ensure loading is set to false after successful sign in
+          console.log("Auth state updated: user set, loading false")
         } catch (error) {
           console.error("Error getting current user:", error)
           setError("Error loading user data")
           setUser(null)
+          setLoading(false) // Ensure loading is set to false even on error
+          console.log("Auth state updated: user null, loading false (error)")
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
         setError(null)
+        setLoading(false) // Ensure loading is set to false after sign out
       } else if (event === "TOKEN_REFRESHED" && session?.user) {
         try {
           const currentUser = await getCurrentUser()
           setUser(currentUser)
           setError(null)
+          setLoading(false) // Ensure loading is set to false after token refresh
         } catch (error) {
           console.error("Error refreshing user data:", error)
           // If token refresh fails, sign out user
           setUser(null)
           setError("Session expired. Please login again.")
+          setLoading(false) // Ensure loading is set to false even on error
         }
       }
     })
