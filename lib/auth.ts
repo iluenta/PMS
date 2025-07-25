@@ -99,9 +99,10 @@ export async function signOut(): Promise<void> {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
     
-    if (!authUser) {
+    if (authError || !authUser) {
+      console.log("No authenticated user found:", authError?.message)
       return null
     }
 
@@ -112,6 +113,12 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       .single()
 
     if (error || !userData) {
+      console.log("User not found in database:", error?.message)
+      return null
+    }
+
+    if (!userData.is_active) {
+      console.log("User account is deactivated")
       return null
     }
 
@@ -162,5 +169,27 @@ export async function getSession() {
   } catch (error) {
     console.error("Get session error:", error)
     return null
+  }
+}
+
+/**
+ * Check if user should be redirected to login
+ */
+export async function shouldRedirectToLogin(): Promise<boolean> {
+  try {
+    const session = await getSession()
+    if (!session) {
+      return true
+    }
+
+    const user = await getCurrentUser()
+    if (!user) {
+      return true
+    }
+
+    return false
+  } catch (error) {
+    console.error("Error checking login status:", error)
+    return true
   }
 } 

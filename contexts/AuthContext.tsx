@@ -58,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event, session?.user?.id)
+      
       if (event === "SIGNED_IN" && session?.user) {
         try {
           const currentUser = await getCurrentUser()
@@ -67,9 +69,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error("Error getting current user:", error)
           setError("Error loading user data")
         }
-      } else if (event === "SIGNED_OUT") {
-        setUser(null)
-        setError(null)
+      } else if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        if (event === "SIGNED_OUT") {
+          setUser(null)
+          setError(null)
+        } else if (event === "TOKEN_REFRESHED" && session?.user) {
+          try {
+            const currentUser = await getCurrentUser()
+            setUser(currentUser)
+            setError(null)
+          } catch (error) {
+            console.error("Error refreshing user data:", error)
+            // If token refresh fails, sign out user
+            setUser(null)
+            setError("Session expired. Please login again.")
+          }
+        }
       }
       setLoading(false)
     })

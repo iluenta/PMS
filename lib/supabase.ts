@@ -3,19 +3,16 @@ import { createClient } from "@supabase/supabase-js"
 // Configuration from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co"
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key"
-const jwtExpiry = parseInt(process.env.NEXT_PUBLIC_JWT_EXPIRY || "60") // 60 seconds = 1 minute
 const persistSession = process.env.NEXT_PUBLIC_AUTH_PERSIST_SESSION === "true"
 const autoRefreshToken = process.env.NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN === "true"
 
-// Create client with custom JWT expiry
+// Create client with proper configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession,
     autoRefreshToken,
     flowType: "pkce",
     detectSessionInUrl: true,
-    // Custom JWT expiry (1 minute)
-    jwtExpiry,
   },
 })
 
