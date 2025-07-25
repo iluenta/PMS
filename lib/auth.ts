@@ -101,68 +101,81 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     console.log("getCurrentUser: Starting...")
     
-    // First check if we have a valid session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session) {
-      console.log("getCurrentUser: No valid session found:", sessionError?.message)
-      return null
-    }
+    // Add timeout for the entire function
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.log("getCurrentUser: Timeout reached, returning null")
+        resolve(null)
+      }, 3000) // 3 second timeout
+    })
 
-    console.log("getCurrentUser: Session found, user ID:", session.user?.id)
-
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !authUser) {
-      console.log("getCurrentUser: No authenticated user found:", authError?.message)
-      return null
-    }
-
-    console.log("getCurrentUser: Auth user found:", authUser.email)
-
-    // In demo mode, return mock user if session exists
-    if (isDemoMode) {
-      console.log("getCurrentUser: Demo mode, returning mock user")
-      return {
-        id: authUser.id,
-        email: authUser.email || "demo@pms.com",
-        full_name: "Demo User",
-        role: "admin",
-        is_active: true,
-        last_login: new Date().toISOString(),
+    const userPromise = async (): Promise<AuthUser | null> => {
+      // First check if we have a valid session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        console.log("getCurrentUser: No valid session found:", sessionError?.message)
+        return null
       }
+
+      console.log("getCurrentUser: Session found, user ID:", session.user?.id)
+
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !authUser) {
+        console.log("getCurrentUser: No authenticated user found:", authError?.message)
+        return null
+      }
+
+      console.log("getCurrentUser: Auth user found:", authUser.email)
+
+      // In demo mode, return mock user if session exists
+      if (isDemoMode) {
+        console.log("getCurrentUser: Demo mode, returning mock user")
+        return {
+          id: authUser.id,
+          email: authUser.email || "demo@pms.com",
+          full_name: "Demo User",
+          role: "admin",
+          is_active: true,
+          last_login: new Date().toISOString(),
+        }
+      }
+
+      console.log("getCurrentUser: Querying users table for ID:", authUser.id)
+      const { data: userData, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single()
+
+      if (error || !userData) {
+        console.log("getCurrentUser: User not found in database:", error?.message)
+        return null
+      }
+
+      console.log("getCurrentUser: User found in database:", userData.email)
+
+      if (!userData.is_active) {
+        console.log("getCurrentUser: User account is deactivated")
+        return null
+      }
+
+      const result = {
+        id: userData.id,
+        email: userData.email,
+        full_name: userData.full_name,
+        role: userData.role,
+        is_active: userData.is_active,
+        last_login: userData.last_login,
+      }
+      
+      console.log("getCurrentUser: Returning user:", result.email)
+      return result
     }
 
-    console.log("getCurrentUser: Querying users table for ID:", authUser.id)
-    const { data: userData, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", authUser.id)
-      .single()
-
-    if (error || !userData) {
-      console.log("getCurrentUser: User not found in database:", error?.message)
-      return null
-    }
-
-    console.log("getCurrentUser: User found in database:", userData.email)
-
-    if (!userData.is_active) {
-      console.log("getCurrentUser: User account is deactivated")
-      return null
-    }
-
-    const result = {
-      id: userData.id,
-      email: userData.email,
-      full_name: userData.full_name,
-      role: userData.role,
-      is_active: userData.is_active,
-      last_login: userData.last_login,
-    }
-    
-    console.log("getCurrentUser: Returning user:", result.email)
-    return result
+    // Race between timeout and user promise
+    return await Promise.race([userPromise(), timeoutPromise])
   } catch (error) {
     console.error("getCurrentUser: Error:", error)
     return null
