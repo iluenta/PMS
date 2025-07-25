@@ -1,6 +1,6 @@
 "use client"
 
-import { TravelerGuide } from "@/components/TravelerGuide"
+import TravelerGuide from "@/components/TravelerGuide"
 import { mockData } from "@/lib/supabase"
 
 export default function DemoGuidePage() {

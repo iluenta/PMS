@@ -150,9 +150,9 @@ El proyecto incluye datos mock que se cargan automáticamente cuando no hay conf
    06-seed-traveler-guide-data.sql
    07-add-availability-tables.sql
    08-seed-availability-data.sql
-   09-create-users-table.sql
    ```
-3. Configurar autenticación en Supabase:
+3. **Nota:** La tabla `users` ya debe existir en tu base de datos con la estructura proporcionada
+4. Configurar autenticación en Supabase:
    - Habilitar Email/Password en Authentication > Providers
    - Configurar JWT expiry en Authentication > Settings (60 segundos)
    - Los usuarios se crean automáticamente al registrarse

@@ -11,7 +11,7 @@ const nextConfig = {
   },
   // Configuración para manejar problemas de certificados SSL
   experimental: {
-    serverComponentsExternalPackages: [],
+    serverExternalPackages: [],
   },
   // Configuración para desarrollo local
   webpack: (config, { dev, isServer }) => {
