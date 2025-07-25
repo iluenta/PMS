@@ -65,19 +65,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false)
       } catch (error) {
         console.error("Auth initialization error:", error)
+        setUser(null)
         setLoading(false)
       }
     }
 
-    // Start initialization immediately
-    initializeAuth()
+    // Start initialization with timeout
+    const timeoutId = setTimeout(() => {
+      console.log("Auth initialization timeout - forcing loading to false")
+      setLoading(false)
+      setUser(null)
+    }, 5000) // 5 second timeout
+
+    initializeAuth().finally(() => {
+      clearTimeout(timeoutId)
+    })
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state change:", event, session?.user?.id)
-      
-      // Don't set loading to false immediately for state changes
-      // Let the initialization handle the initial loading state
       
       if (event === "SIGNED_IN" && session?.user) {
         try {
@@ -87,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error("Error getting current user:", error)
           setError("Error loading user data")
+          setUser(null)
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
