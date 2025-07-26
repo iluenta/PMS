@@ -101,9 +101,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     console.log("getCurrentUser: Starting...")
     
-    // First check if we have a valid session
-    console.log("getCurrentUser: Getting session...")
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    // Add timeout for getSession specifically
+    const sessionPromise = supabase.auth.getSession()
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.log("getCurrentUser: Session timeout reached")
+        resolve(null)
+      }, 5000) // 5 second timeout for session
+    })
+
+    console.log("getCurrentUser: Getting session with timeout...")
+    const sessionResult = await Promise.race([sessionPromise, timeoutPromise])
+    
+    if (!sessionResult) {
+      console.log("getCurrentUser: Session timeout - returning null")
+      return null
+    }
+
+    const { data: { session }, error: sessionError } = sessionResult
     console.log("getCurrentUser: Session result:", { session: !!session, error: sessionError?.message })
     
     if (sessionError || !session) {
@@ -113,8 +128,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     console.log("getCurrentUser: Session found, user ID:", session.user?.id)
 
-    console.log("getCurrentUser: Getting auth user...")
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    // Add timeout for getUser specifically
+    const userPromise = supabase.auth.getUser()
+    const userTimeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.log("getCurrentUser: Auth user timeout reached")
+        resolve(null)
+      }, 5000) // 5 second timeout for auth user
+    })
+
+    console.log("getCurrentUser: Getting auth user with timeout...")
+    const userResult = await Promise.race([userPromise, userTimeoutPromise])
+    
+    if (!userResult) {
+      console.log("getCurrentUser: Auth user timeout - returning null")
+      return null
+    }
+
+    const { data: { user: authUser }, error: authError } = userResult
     console.log("getCurrentUser: Auth user result:", { user: !!authUser, error: authError?.message })
     
     if (authError || !authUser) {
@@ -137,13 +168,30 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       }
     }
 
-    console.log("getCurrentUser: Querying users table for ID:", authUser.id)
-    console.log("getCurrentUser: About to execute database query...")
-    const { data: userData, error } = await supabase
+    // Add timeout for database query
+    const dbPromise = supabase
       .from("users")
       .select("*")
       .eq("id", authUser.id)
       .single()
+    
+    const dbTimeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.log("getCurrentUser: Database query timeout reached")
+        resolve(null)
+      }, 10000) // 10 second timeout for database
+    })
+
+    console.log("getCurrentUser: Querying users table for ID:", authUser.id)
+    console.log("getCurrentUser: About to execute database query with timeout...")
+    const dbResult = await Promise.race([dbPromise, dbTimeoutPromise])
+    
+    if (!dbResult) {
+      console.log("getCurrentUser: Database timeout - returning null")
+      return null
+    }
+
+    const { data: userData, error } = dbResult
     console.log("getCurrentUser: Database query completed:", { data: !!userData, error: error?.message })
 
     if (error || !userData) {
