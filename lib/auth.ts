@@ -102,7 +102,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     console.log("getCurrentUser: Starting...")
     
     // First check if we have a valid session
+    console.log("getCurrentUser: Getting session...")
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    console.log("getCurrentUser: Session result:", { session: !!session, error: sessionError?.message })
     
     if (sessionError || !session) {
       console.log("getCurrentUser: No valid session found:", sessionError?.message)
@@ -111,7 +113,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     console.log("getCurrentUser: Session found, user ID:", session.user?.id)
 
+    console.log("getCurrentUser: Getting auth user...")
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    console.log("getCurrentUser: Auth user result:", { user: !!authUser, error: authError?.message })
     
     if (authError || !authUser) {
       console.log("getCurrentUser: No authenticated user found:", authError?.message)
@@ -134,11 +138,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
 
     console.log("getCurrentUser: Querying users table for ID:", authUser.id)
+    console.log("getCurrentUser: About to execute database query...")
     const { data: userData, error } = await supabase
       .from("users")
       .select("*")
       .eq("id", authUser.id)
       .single()
+    console.log("getCurrentUser: Database query completed:", { data: !!userData, error: error?.message })
 
     if (error || !userData) {
       console.log("getCurrentUser: User not found in database:", error?.message)
