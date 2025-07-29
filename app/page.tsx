@@ -2,24 +2,24 @@
 
 import { useAuth } from "@/contexts/AuthContext"
 import LoginForm from "@/components/LoginForm"
-import Layout from "@/components/Layout"
+import { Layout } from "@/components/Layout"
 import Dashboard from "@/components/Dashboard"
-import AuthLoading from "@/components/AuthLoading"
 
-export default function Home() {
+export default function HomePage() {
   const { user, loading } = useAuth()
 
-  // Show loading spinner while checking authentication
   if (loading) {
-    return <AuthLoading />
+    return (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary" />
+      </div>
+    )
   }
 
-  // Only show login form when we're sure user is not authenticated
   if (!user) {
     return <LoginForm />
   }
 
-  // User is authenticated, show dashboard
   return (
     <Layout>
       <Dashboard />

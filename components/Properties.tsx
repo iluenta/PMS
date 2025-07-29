@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,13 +21,54 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase, isDemoMode, mockData, type Property } from "@/lib/supabase"
-import { Building2, Plus, Edit, MapPin, Users, Bed, Bath, Camera, X, Star, BookOpen, CalendarCheck } from "lucide-react"
+import { Building2, Plus, Edit, MapPin, Users, Bed, Bath, Camera, X, Star, BookOpen, CalendarCheck, Globe } from "lucide-react"
+import PropertyChannels from "./PropertyChannels"
+import { useToast } from "@/hooks/use-toast"
+
+// Helper function to normalize property type from database
+const normalizePropertyType = (type: string): string => {
+  if (!type) return 'apartment'
+  
+  const normalizedType = type.toLowerCase().trim()
+  const validTypes = ['apartment', 'house', 'loft', 'studio', 'villa', 'chalet']
+  
+  // If it's already a valid type, return it
+  if (validTypes.includes(normalizedType)) {
+    return normalizedType
+  }
+  
+  // Try to map common variations
+  const typeMapping: { [key: string]: string } = {
+    'apartamento': 'apartment',
+    'casa': 'house',
+    'estudio': 'studio',
+    'piso': 'apartment',
+    'vivienda': 'apartment'
+  }
+  
+  return typeMapping[normalizedType] || 'apartment'
+}
+
+// Helper function to get property type display name
+const getPropertyTypeDisplayName = (type: string) => {
+  const normalizedType = normalizePropertyType(type)
+  const typeMap: { [key: string]: string } = {
+    apartment: 'Apartamento',
+    house: 'Casa',
+    loft: 'Loft',
+    studio: 'Estudio',
+    villa: 'Villa',
+    chalet: 'Chalet'
+  }
+  return typeMap[normalizedType] || 'Apartamento'
+}
 
 export default function Properties() {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProperty, setEditingProperty] = useState<Property | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     fetchProperties()
@@ -43,9 +84,15 @@ export default function Properties() {
       const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
+
       setProperties(data || [])
     } catch (error) {
       console.error("Error fetching properties:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las propiedades",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
@@ -84,7 +131,12 @@ export default function Properties() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <PropertyDialog property={editingProperty} onClose={() => setIsDialogOpen(false)} onSave={fetchProperties} />
+            <PropertyDialog 
+              key={editingProperty?.id || 'new'} 
+              property={editingProperty} 
+              onClose={() => setIsDialogOpen(false)} 
+              onSave={fetchProperties} 
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -119,7 +171,12 @@ export default function Properties() {
               )}
             </div>
             <CardHeader>
-              <CardTitle className="text-lg">{property.name}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{property.name}</CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  {getPropertyTypeDisplayName(property.type)}
+                </Badge>
+              </div>
               <CardDescription className="flex items-center text-sm text-gray-500">
                 <MapPin className="h-4 w-4 mr-1" />
                 {property.city}, {property.country}
@@ -140,7 +197,7 @@ export default function Properties() {
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 mr-1" />
-                    {property.max_guests}
+                    {property.capacity}
                   </div>
                 </div>
               </div>
@@ -214,19 +271,35 @@ function PropertyDialog({
   onClose: () => void
   onSave: () => void
 }) {
+  const { toast } = useToast()
+  
+  // Estabilizar la referencia de property para evitar re-renders
+  const stableProperty = useMemo(() => property, [property?.id])
+  
+  // Usar ref para controlar cuándo se debe actualizar el formulario
+  const hasInitialized = useRef(false)
+  const currentPropertyId = useRef<string | null>(null)
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    type: "apartment",
     address: "",
     city: "",
+    postal_code: "",
     country: "",
-    property_type: "apartment",
     bedrooms: 1,
     bathrooms: 1,
-    max_guests: 2,
+    capacity: 2,
+    area: 0,
     base_price: 50,
     cleaning_fee: 25,
-    cover_image: "",
+    security_deposit: 0,
+    check_in_time: "15:00",
+    check_out_time: "11:00",
+    min_stay: 1,
+    max_stay: 30,
+    is_active: true,
     images: [] as string[],
     amenities: [] as string[],
     status: "active",
@@ -255,53 +328,76 @@ function PropertyDialog({
   ]
 
   useEffect(() => {
-    if (property) {
-      setFormData({
-        name: property.name,
-        description: property.description || "",
-        address: property.address || "",
-        city: property.city || "",
-        country: property.country || "",
-        property_type: property.property_type || "apartment",
-        bedrooms: property.bedrooms || 1,
-        bathrooms: property.bathrooms || 1,
-        max_guests: property.max_guests || 2,
-        base_price: property.base_price || 50,
-        cleaning_fee: property.cleaning_fee || 25,
-        cover_image: property.cover_image || "",
-        images: property.images || [],
-        amenities: property.amenities || [],
-        status: property.status || "active",
-      })
-
-      // Load availability settings for existing property
-      if (isDemoMode) {
-        const settings = mockData.availabilitySettings.find((s) => s.property_id === property.id)
-        if (settings) {
-          setAvailabilityData({
-            min_nights: settings.min_nights,
-            max_nights: settings.max_nights,
-            advance_booking_days: settings.advance_booking_days,
-            max_advance_booking_days: settings.max_advance_booking_days,
-            check_in_days: settings.check_in_days,
-            check_out_days: settings.check_out_days,
-          })
-        }
+    // Solo actualizar si es una nueva property o es la primera vez
+    if (stableProperty && (!hasInitialized.current || currentPropertyId.current !== stableProperty.id)) {
+      hasInitialized.current = true
+      currentPropertyId.current = stableProperty.id
+      
+      const typeValue = normalizePropertyType(stableProperty.type)
+      
+      const formDataToSet = {
+        name: stableProperty.name,
+        description: stableProperty.description || "",
+        type: typeValue,
+        address: stableProperty.address || "",
+        city: stableProperty.city || "",
+        postal_code: stableProperty.postal_code || "",
+        country: stableProperty.country || "",
+        bedrooms: stableProperty.bedrooms || 1,
+        bathrooms: stableProperty.bathrooms || 1,
+        capacity: stableProperty.capacity || 2,
+        area: stableProperty.area || 0,
+        base_price: stableProperty.base_price || 50,
+        cleaning_fee: stableProperty.cleaning_fee || 25,
+        security_deposit: stableProperty.security_deposit || 0,
+        check_in_time: stableProperty.check_in_time || "15:00",
+        check_out_time: stableProperty.check_out_time || "11:00",
+        min_stay: stableProperty.min_stay || 1,
+        max_stay: stableProperty.max_stay || 30,
+        is_active: stableProperty.is_active !== undefined ? stableProperty.is_active : true,
+        images: stableProperty.images || [],
+        amenities: stableProperty.amenities || [],
+        status: stableProperty.status || "active",
       }
-    } else {
+      
+      // Usar setTimeout para asegurar que el estado se actualice correctamente
+      setTimeout(() => {
+        setFormData(formDataToSet)
+      }, 0)
+
+      // Load availability settings from property data
+      setAvailabilityData({
+        min_nights: stableProperty.min_stay || 1,
+        max_nights: stableProperty.max_stay || 30,
+        advance_booking_days: 0, // Not in properties table
+        max_advance_booking_days: 365, // Not in properties table
+        check_in_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"], // Default
+        check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"], // Default
+      })
+    } else if (!stableProperty && hasInitialized.current) {
+      // Reset solo si no hay property y ya estaba inicializado (nuevo formulario)
+      hasInitialized.current = false
+      currentPropertyId.current = null
       setFormData({
         name: "",
         description: "",
+        type: "apartment",
         address: "",
         city: "",
+        postal_code: "",
         country: "",
-        property_type: "apartment",
         bedrooms: 1,
         bathrooms: 1,
-        max_guests: 2,
+        capacity: 2,
+        area: 0,
         base_price: 50,
         cleaning_fee: 25,
-        cover_image: "",
+        security_deposit: 0,
+        check_in_time: "15:00",
+        check_out_time: "11:00",
+        min_stay: 1,
+        max_stay: 30,
+        is_active: true,
         images: [],
         amenities: [],
         status: "active",
@@ -315,58 +411,94 @@ function PropertyDialog({
         check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
       })
     }
-  }, [property])
+  }, [stableProperty])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     try {
       if (isDemoMode) {
-        alert(property ? "Propiedad actualizada (Demo)" : "Propiedad creada (Demo)")
+        toast({
+          title: "Demo",
+          description: property ? "Propiedad actualizada (Demo)" : "Propiedad creada (Demo)"
+        })
         onSave()
         onClose()
         return
       }
 
       if (property) {
-        const { error } = await supabase.from("properties").update(formData).eq("id", property.id)
-        if (error) throw error
-
-        // Update availability settings
-        const { error: availError } = await supabase.from("availability_settings").upsert({
-          property_id: property.id,
-          ...availabilityData,
-          updated_at: new Date().toISOString(),
-        })
-        if (availError) throw availError
+        // Remove cover_image from formData as it doesn't exist in the database
+        const { cover_image, ...propertyData } = formData
+        
+        // Include availability settings in the property data
+        const propertyDataWithAvailability = {
+          ...propertyData,
+          min_stay: availabilityData.min_nights,
+          max_stay: availabilityData.max_nights,
+        }
+        
+        console.log("Updating property with data:", propertyDataWithAvailability)
+        const { data: updateData, error } = await supabase
+          .from("properties")
+          .update(propertyDataWithAvailability)
+          .eq("id", property.id)
+          .select()
+        console.log("Update result:", { data: updateData, error })
+        if (error) {
+          console.error("Supabase update error:", error)
+          throw error
+        }
       } else {
+        // Remove cover_image from formData as it doesn't exist in the database
+        const { cover_image, ...propertyData } = formData
+        
+        // Include availability settings in the property data
+        const propertyDataWithAvailability = {
+          ...propertyData,
+          min_stay: availabilityData.min_nights,
+          max_stay: availabilityData.max_nights,
+        }
+        
+        console.log("Creating property with data:", propertyDataWithAvailability)
         const { data: newProperty, error } = await supabase
           .from("properties")
-          .insert([
-            {
-              ...formData,
-              owner_id: "550e8400-e29b-41d4-a716-446655440000", // Demo user ID
-            },
-          ])
+          .insert([propertyDataWithAvailability])
           .select()
           .single()
 
-        if (error) throw error
-
-        // Create availability settings for new property
-        if (newProperty) {
-          const { error: availError } = await supabase.from("availability_settings").insert({
-            property_id: newProperty.id,
-            ...availabilityData,
-          })
-          if (availError) throw availError
+        console.log("Create result:", { data: newProperty, error })
+        if (error) {
+          console.error("Supabase create error:", error)
+          throw error
         }
       }
 
+      toast({
+        title: "Éxito",
+        description: property ? "Propiedad actualizada correctamente" : "Propiedad creada correctamente"
+      })
       onSave()
       onClose()
     } catch (error) {
       console.error("Error saving property:", error)
+      console.error("Error type:", typeof error)
+      console.error("Error constructor:", error?.constructor?.name)
+      console.error("Error message:", error?.message)
+      console.error("Error details:", JSON.stringify(error, null, 2))
+      
+      let errorMessage = "No se pudo guardar la propiedad"
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = error.message || JSON.stringify(error)
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      })
     }
   }
 
@@ -441,11 +573,12 @@ function PropertyDialog({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="basic">Básico</TabsTrigger>
             <TabsTrigger value="images">Imágenes</TabsTrigger>
             <TabsTrigger value="amenities">Comodidades</TabsTrigger>
             <TabsTrigger value="availability">Disponibilidad</TabsTrigger>
+            <TabsTrigger value="channels">Canales</TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-4">
@@ -461,10 +594,10 @@ function PropertyDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="property_type">Tipo</Label>
+                <Label htmlFor="type">Tipo</Label>
                 <Select
-                  value={formData.property_type}
-                  onValueChange={(value) => setFormData({ ...formData, property_type: value })}
+                  value={formData.type}
+                  onValueChange={(value) => setFormData({ ...formData, type: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -474,6 +607,8 @@ function PropertyDialog({
                     <SelectItem value="house">Casa</SelectItem>
                     <SelectItem value="loft">Loft</SelectItem>
                     <SelectItem value="studio">Estudio</SelectItem>
+                    <SelectItem value="villa">Villa</SelectItem>
+                    <SelectItem value="chalet">Chalet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -539,13 +674,13 @@ function PropertyDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="max_guests">Huéspedes máx.</Label>
+                <Label htmlFor="capacity">Huéspedes máx.</Label>
                 <Input
-                  id="max_guests"
+                  id="capacity"
                   type="number"
                   min="1"
-                  value={formData.max_guests}
-                  onChange={(e) => setFormData({ ...formData, max_guests: Number.parseInt(e.target.value) })}
+                  value={formData.capacity}
+                  onChange={(e) => setFormData({ ...formData, capacity: Number.parseInt(e.target.value) })}
                 />
               </div>
             </div>
@@ -761,6 +896,22 @@ function PropertyDialog({
                 </div>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="channels" className="space-y-4">
+            {property ? (
+              <PropertyChannels propertyId={property.id} />
+            ) : (
+              <div className="text-center py-12">
+                <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                  Guarda la propiedad primero
+                </h3>
+                <p className="text-muted-foreground">
+                  Necesitas guardar la propiedad antes de configurar los canales de distribución
+                </p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

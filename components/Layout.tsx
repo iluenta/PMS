@@ -1,35 +1,30 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { useAuthRedirect } from "@/hooks/useAuthRedirect"
 import { Button } from "@/components/ui/button"
+import { Toaster } from "@/components/ui/toaster"
 import {
-  Building2,
+  Menu,
+  X,
   Home,
+  Building2,
+  Bed,
   Calendar,
+  CalendarCheck,
   Users,
   CreditCard,
+  DollarSign,
+  Receipt,
+  BookOpen,
   BarChart3,
   Settings,
   LogOut,
-  Menu,
-  X,
-  Bed,
-  Globe,
-  Percent,
-  Receipt,
-  DollarSign,
-  BookOpen,
-  CalendarCheck,
+  Share2,
 } from "lucide-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-
-interface LayoutProps {
-  children: React.ReactNode
-}
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -39,124 +34,126 @@ const navigation = [
   { name: "Disponibilidad", href: "/availability", icon: CalendarCheck },
   { name: "Huéspedes", href: "/guests", icon: Users },
   { name: "Tarifas", href: "/pricing", icon: CreditCard },
-  { name: "Canales", href: "/channels", icon: Globe },
-  { name: "Comisiones", href: "/commission-settings", icon: Percent },
   { name: "Pagos Reservas", href: "/booking-payments", icon: DollarSign },
   { name: "Gastos", href: "/property-expenses", icon: Receipt },
+  { name: "Canales Distribución", href: "/property-channels", icon: Share2 },
   { name: "Guía Viajero", href: "/traveler-guide-management", icon: BookOpen },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Configuración", href: "/settings", icon: Settings },
 ]
 
-export default function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, signOut } = useAuth()
+function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname()
+  const { signOut } = useAuth()
+
+  const handleSignOut = () => {
+    signOut()
+    if (onLinkClick) onLinkClick()
+  }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-40 lg:hidden ${sidebarOpen ? "block" : "hidden"}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="relative flex w-full max-w-xs flex-1 flex-col bg-white">
-          <div className="absolute top-0 right-0 -mr-12 pt-2">
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-white">
-              <X className="h-6 w-6" />
-            </Button>
-          </div>
-          <SidebarContent pathname={pathname} signOut={signOut} />
-        </div>
+    <div className="flex flex-col h-full bg-gray-50 border-r">
+      <div className="flex items-center justify-between h-16 px-4 border-b">
+        <Link href="/" className="flex items-center gap-2 font-semibold" onClick={onLinkClick}>
+          <Building2 className="h-6 w-6 text-primary" />
+          <span className="font-bold">TuriGest</span>
+        </Link>
       </div>
-
-      {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-        <div className="flex flex-1 flex-col min-h-0 bg-white border-r border-gray-200">
-          <SidebarContent pathname={pathname} signOut={signOut} />
-        </div>
+      <div className="flex-1 overflow-auto py-2">
+        <nav className="grid items-start px-4 text-sm font-medium">
+          {navigation.map((item) => (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={onLinkClick}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-primary ${
+                pathname === item.href ? "bg-gray-100 text-primary" : ""
+              }`}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.name}
+            </Link>
+          ))}
+        </nav>
       </div>
-
-      {/* Main content */}
-      <div className="flex flex-1 flex-col lg:pl-64">
-        <div className="sticky top-0 z-10 flex h-16 flex-shrink-0 bg-white shadow">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} className="lg:hidden">
-            <Menu className="h-6 w-6" />
-          </Button>
-          <div className="flex flex-1 justify-between px-4">
-            <div className="flex flex-1">
-              <div className="flex items-center">
-                <h1 className="text-xl font-semibold text-gray-900">PMS Turístico</h1>
-              </div>
-            </div>
-            <div className="ml-4 flex items-center md:ml-6">
-              <span className="text-sm text-gray-700 mr-4">{user?.email}</span>
-            </div>
-          </div>
-        </div>
-
-        <main className="flex-1 overflow-y-auto">
-          <div className="py-6">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
-          </div>
-        </main>
+      <div className="mt-auto border-t p-4">
+        <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" />
+          Cerrar Sesión
+        </Button>
       </div>
     </div>
   )
 }
 
-function SidebarContent({ pathname, signOut }: { pathname: string; signOut: () => void }) {
-  return (
-    <>
-      <div className="flex flex-1 flex-col pt-5 pb-4 overflow-y-auto">
-        <div className="flex items-center flex-shrink-0 px-4">
-          <Building2 className="h-8 w-8 text-blue-600" />
-          <span className="ml-2 text-xl font-bold text-gray-900">PMS</span>
-        </div>
+export function Layout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  const pathname = usePathname()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-        {/* Demo Guide Link */}
-        <div className="px-4 py-2">
+  useAuthRedirect()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  return (
+    <div className="flex min-h-screen w-full bg-gray-100/40">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:block lg:w-72">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile Sidebar */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="relative flex w-72 max-w-[calc(100%-3rem)] flex-1 flex-col bg-white">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            <SidebarContent onLinkClick={() => setMobileMenuOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col flex-1">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
           <Button
             variant="outline"
-            size="sm"
-            onClick={() => window.open("/demo-guide", "_blank")}
-            className="w-full text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setMobileMenuOpen(true)}
           >
-            <BookOpen className="h-4 w-4 mr-2" />
-            Ver Guía Demo
+            <Menu className="h-6 w-6" />
+            <span className="sr-only">Abrir menú</span>
           </Button>
-        </div>
-
-        <nav className="mt-5 flex-1 px-2 space-y-1">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                  isActive ? "bg-blue-100 text-blue-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <item.icon
-                  className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                    isActive ? "text-blue-500" : "text-gray-400 group-hover:text-gray-500"
-                  }`}
-                />
-                {item.name}
-              </Link>
-            )
-          })}
-        </nav>
+          <div className="flex-1">
+            {/* Header content can go here */}
+          </div>
+          <span className="text-sm text-gray-500 hidden sm:inline">
+            {user.email}
+          </span>
+        </header>
+        <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
-      <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-        <Button
-          variant="ghost"
-          onClick={signOut}
-          className="group flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 w-full justify-start"
-        >
-          <LogOut className="mr-3 h-6 w-6 text-gray-400 group-hover:text-gray-500" />
-          Cerrar Sesión
-        </Button>
-      </div>
-    </>
+      <Toaster />
+    </div>
   )
 }

@@ -2,8 +2,15 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { supabase, isDemoMode } from "@/lib/supabase"
-import { signInWithPassword, signOut as authSignOut, getCurrentUser, type AuthUser } from "@/lib/auth"
+import { supabase, isDemoMode, clearExpiredTokens } from "@/lib/supabase"
+import {
+  AuthUser,
+  signInWithPassword,
+  signOut as signOutApi,
+  getCurrentUser,
+  getUserProfile,
+  LoginCredentials,
+} from "@/lib/auth"
 
 interface AuthContextType {
   user: AuthUser | null
@@ -32,108 +39,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        console.log("Initializing auth, isDemoMode:", isDemoMode)
+    // Set initial loading to true
+    setLoading(true)
+
+    // onAuthStateChange handles everything: initial session, sign in, sign out, token refresh
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("=== AUTH STATE CHANGE ===", { event, session })
+
+      // Handle specific events
+      if (event === "TOKEN_REFRESHED") {
+        console.log("Token refresh event:", { session })
         
-        if (isDemoMode) {
-          // In demo mode, check localStorage for demo session
-          const demoSession = localStorage.getItem("demo-session")
-          console.log("Demo session found:", demoSession)
-          if (demoSession === "active") {
-            setUser(mockUser)
-          }
+        // If token refresh failed (session is null), sign out completely
+        if (!session) {
+          console.log("Token refresh failed, signing out...")
+          // Use setTimeout to avoid deadlock - move async call outside callback
+          setTimeout(async () => {
+            await clearExpiredTokens()
+          }, 0)
+          setUser(null)
           setLoading(false)
           return
         }
+      }
 
-        // Real Supabase authentication - check session first
-        const { data: { session } } = await supabase.auth.getSession()
-        console.log("Initial session check:", session?.user?.id)
+      if (event === "SIGNED_OUT") {
+        console.log("User signed out")
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
+      // For INITIAL_SESSION, SIGNED_IN, and successful TOKEN_REFRESHED
+      if (session?.user) {
+        console.log("Valid session found, getting user profile...")
         
-        if (session?.user) {
+        // Use setTimeout to avoid deadlock - move async call outside callback
+        setTimeout(async () => {
           try {
-            const currentUser = await getCurrentUser()
-            setUser(currentUser)
-          } catch (error) {
-            console.error("Error getting current user on init:", error)
+            const userProfile = await getUserProfile(session.user.id)
+            
+            console.log("AuthContext: User profile result:", userProfile ? "success" : "failed")
+            setUser(userProfile)
+          } catch (profileError) {
+            console.error("AuthContext: Error getting user profile:", profileError)
             setUser(null)
+          } finally {
+            setLoading(false)
           }
-        } else {
-          setUser(null)
-        }
-        setLoading(false)
-      } catch (error) {
-        console.error("Auth initialization error:", error)
+        }, 0)
+      } else {
+        console.log("No valid session")
         setUser(null)
         setLoading(false)
       }
-    }
-
-    // Start initialization
-    initializeAuth()
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("=== AUTH STATE CHANGE ===")
-      console.log("Event:", event)
-      console.log("Session user ID:", session?.user?.id)
-      console.log("Current loading state:", loading)
-      console.log("Current user state:", user?.email)
-      
-      if (event === "SIGNED_IN" && session?.user) {
-        console.log("Processing SIGNED_IN event, user ID:", session.user.id)
-        try {
-          const currentUser = await getCurrentUser()
-          console.log("Current user retrieved:", currentUser?.email)
-          if (currentUser) {
-            setUser(currentUser)
-            setError(null)
-            setLoading(false)
-            console.log("Auth state updated: user set, loading false")
-          } else {
-            console.log("getCurrentUser returned null, setting user to null")
-            setUser(null)
-            setLoading(false)
-          }
-        } catch (error) {
-          console.error("Error getting current user:", error)
-          setError("Error loading user data")
-          setUser(null)
-          setLoading(false)
-          console.log("Auth state updated: user null, loading false (error)")
-        }
-      } else if (event === "SIGNED_OUT") {
-        console.log("Processing SIGNED_OUT event")
-        setUser(null)
-        setError(null)
-        setLoading(false)
-      } else if (event === "TOKEN_REFRESHED" && session?.user) {
-        console.log("Processing TOKEN_REFRESHED event")
-        try {
-          const currentUser = await getCurrentUser()
-          if (currentUser) {
-            setUser(currentUser)
-            setError(null)
-            setLoading(false)
-          } else {
-            setUser(null)
-            setLoading(false)
-          }
-        } catch (error) {
-          console.error("Error refreshing user data:", error)
-          setUser(null)
-          setError("Session expired. Please login again.")
-          setLoading(false)
-        }
-      }
-      
-      console.log("=== AUTH STATE CHANGE COMPLETED ===")
-      console.log("Final loading state:", loading)
-      console.log("Final user state:", user?.email)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -176,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      await authSignOut()
+      await signOutApi()
       setUser(null)
     } catch (error) {
       console.error("Sign out error:", error)

@@ -2,7 +2,8 @@
 
 import { useAuth } from "@/contexts/AuthContext"
 import LoginForm from "@/components/LoginForm"
-import Layout from "@/components/Layout"
+import { Layout } from "@/components/Layout"
+import Settings from "@/components/Settings"
 
 export default function SettingsPage() {
   const { user, loading } = useAuth()
@@ -21,10 +22,7 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold mb-4">Configuración</h2>
-        <p className="text-gray-600">Funcionalidad en desarrollo</p>
-      </div>
+      <Settings />
     </Layout>
   )
 }

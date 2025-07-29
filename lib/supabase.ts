@@ -1,224 +1,541 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 
-// Configuration from environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co"
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key"
-const persistSession = process.env.NEXT_PUBLIC_AUTH_PERSIST_SESSION === "true" || true
-const autoRefreshToken = process.env.NEXT_PUBLIC_AUTH_AUTO_REFRESH_TOKEN === "true" || true
+// ============================================================================
+// Mock Data (for Demo Mode)
+// ============================================================================
 
-// Create client with proper configuration
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession,
-    autoRefreshToken,
-    flowType: "pkce",
-    detectSessionInUrl: true,
+const mockProperties = [
+  {
+    id: "550e8400-e29b-41d4-a716-446655440001",
+    name: "Luxury Apartment in Madrid",
+    description: "A spacious and modern apartment in the heart of Madrid, perfect for a family or a group of friends.",
+    type: "Apartment",
+    address: "Calle de Ruiz de Alarcón, 23, 28014 Madrid",
+    city: "Madrid",
+    postal_code: "28014",
+    country: "Spain",
+    bedrooms: 2,
+    bathrooms: 1,
+    capacity: 4,
+    area: 60,
+    base_price: 100,
+    cleaning_fee: 20,
+    security_deposit: 100,
+    check_in_time: "15:00",
+    check_out_time: "11:00",
+    min_stay: 1,
+    max_stay: 30,
+    is_active: true,
+    images: [
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+    ],
+    amenities: ["WiFi", "Aire acondicionado", "Cocina completa", "Baño privado"],
+    status: "active",
+    channel_ratings: {
+      Booking: 4.5,
+      Airbnb: 4.8,
+      Expedia: 4.2,
+    },
+    channel_configuration: {
+      Booking: {
+        api_key: "your_booking_api_key",
+        channel_type: "ota",
+      },
+      Airbnb: {
+        api_key: "your_airbnb_api_key",
+        channel_type: "ota",
+      },
+      Expedia: {
+        api_key: "your_expedia_api_key",
+        channel_type: "ota",
+      },
+    },
+    created_at: "2024-01-01T10:00:00Z",
+    updated_at: "2024-01-01T10:00:00Z",
   },
-})
+  {
+    id: "550e8400-e29b-41d4-a716-446655440002",
+    name: "Cozy Studio in Barcelona",
+    description: "A cozy and comfortable studio in the Gothic Quarter of Barcelona.",
+    type: "Studio",
+    address: "Calle de Cuchilleros, 17, 28005 Barcelona",
+    city: "Barcelona",
+    postal_code: "08003",
+    country: "Spain",
+    bedrooms: 0,
+    bathrooms: 1,
+    capacity: 2,
+    area: 30,
+    base_price: 50,
+    cleaning_fee: 10,
+    security_deposit: 50,
+    check_in_time: "14:00",
+    check_out_time: "10:00",
+    min_stay: 1,
+    max_stay: 30,
+    is_active: true,
+    images: [
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+    ],
+    amenities: ["WiFi", "Aire acondicionado", "Baño privado"],
+    status: "active",
+    channel_ratings: {
+      Booking: 4.0,
+      Airbnb: 4.5,
+      Expedia: 3.8,
+    },
+    channel_configuration: {
+      Booking: {
+        api_key: "your_booking_api_key",
+        channel_type: "ota",
+      },
+      Airbnb: {
+        api_key: "your_airbnb_api_key",
+        channel_type: "ota",
+      },
+      Expedia: {
+        api_key: "your_expedia_api_key",
+        channel_type: "ota",
+      },
+    },
+    created_at: "2024-01-15T10:00:00Z",
+    updated_at: "2024-01-15T10:00:00Z",
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440003",
+    name: "Modern Loft in Valencia",
+    description: "A modern and stylish loft in the heart of Valencia, close to the beach.",
+    type: "Loft",
+    address: "Calle de San Vicente, 10, 46003 Valencia",
+    city: "Valencia",
+    postal_code: "46003",
+    country: "Spain",
+    bedrooms: 1,
+    bathrooms: 1,
+    capacity: 2,
+    area: 40,
+    base_price: 70,
+    cleaning_fee: 15,
+    security_deposit: 70,
+    check_in_time: "16:00",
+    check_out_time: "11:00",
+    min_stay: 1,
+    max_stay: 30,
+    is_active: true,
+    images: [
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+      "https://via.placeholder.com/600x400",
+    ],
+    amenities: ["WiFi", "Aire acondicionado", "Cocina completa", "Baño privado"],
+    status: "pending",
+    created_at: "2024-02-28T10:00:00Z",
+    updated_at: "2024-02-28T10:00:00Z",
+  },
+]
 
-// Mock data for demo when Supabase is not configured
+const mockGuests = [
+  {
+    id: "550e8400-e29b-41d4-a716-446655440001",
+    first_name: "John",
+    last_name: "Doe",
+    email: "john.doe@example.com",
+    phone: "+34 600 123 456",
+    country: "Spain",
+    date_of_birth: "1990-01-01",
+    id_number: "12345678Z",
+    notes: "Regular guest",
+    created_at: "2024-01-01T10:00:00Z",
+    updated_at: "2024-01-01T10:00:00Z",
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440002",
+    first_name: "Jane",
+    last_name: "Smith",
+    email: "jane.smith@example.com",
+    phone: "+34 600 789 012",
+    country: "Spain",
+    date_of_birth: "1995-05-10",
+    id_number: "87654321Y",
+    notes: "VIP guest",
+    created_at: "2024-01-10T10:00:00Z",
+    updated_at: "2024-01-10T10:00:00Z",
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440003",
+    first_name: "Peter",
+    last_name: "Jones",
+    email: "peter.jones@example.com",
+    phone: "+34 600 234 567",
+    country: "Spain",
+    date_of_birth: "2000-11-20",
+    id_number: "11223344A",
+    notes: "First-time guest",
+    created_at: "2024-02-01T10:00:00Z",
+    updated_at: "2024-02-01T10:00:00Z",
+  },
+]
+
+const mockBookings = [
+  {
+    id: "750e8400-e29b-41d4-a716-446655440001",
+    property_id: "550e8400-e29b-41d4-a716-446655440001",
+    guest_id: "550e8400-e29b-41d4-a716-446655440001",
+    check_in: "2024-01-20",
+    check_out: "2024-01-25",
+    guests_count: 2,
+    total_amount: 500,
+    commission_rate: 15.0,
+    commission_amount: 75,
+    net_amount: 425,
+    status: "completed",
+    booking_source: "Booking.com",
+    special_requests: "No special requests",
+    created_at: "2024-01-20T10:00:00Z",
+    updated_at: "2024-01-25T10:00:00Z",
+    property: mockProperties[0],
+    guest: mockGuests[0],
+  },
+  {
+    id: "750e8400-e29b-41d4-a716-446655440002",
+    property_id: "550e8400-e29b-41d4-a716-446655440002",
+    guest_id: "550e8400-e29b-41d4-a716-446655440002",
+    check_in: "2024-02-14",
+    check_out: "2024-02-16",
+    guests_count: 1,
+    total_amount: 200,
+    commission_rate: 12.0,
+    commission_amount: 24,
+    net_amount: 176,
+    status: "completed",
+    booking_source: "Airbnb",
+    special_requests: "Late check-in after 20:00",
+    created_at: "2024-02-14T10:00:00Z",
+    updated_at: "2024-02-16T10:00:00Z",
+    property: mockProperties[1],
+    guest: mockGuests[1],
+  },
+  {
+    id: "750e8400-e29b-41d4-a716-446655440003",
+    property_id: "550e8400-e29b-41d4-a716-446655440003",
+    guest_id: "550e8400-e29b-41d4-a716-446655440003",
+    check_in: "2024-01-20",
+    check_out: "2024-01-22",
+    guests_count: 2,
+    total_amount: 400,
+    commission_rate: 18.0,
+    commission_amount: 72,
+    net_amount: 328,
+    status: "pending",
+    booking_source: "Expedia",
+    special_requests: "Breakfast included",
+    created_at: "2024-01-20T10:00:00Z",
+    updated_at: "2024-01-22T10:00:00Z",
+    property: mockProperties[2],
+    guest: mockGuests[2],
+  },
+]
+
+const mockExpenses = [
+  {
+    id: "pe1",
+    property_id: "550e8400-e29b-41d4-a716-446655440001",
+    booking_id: "750e8400-e29b-41d4-a716-446655440001",
+    expense_type: "Cleaning",
+    category: "General",
+    description: "Regular cleaning of the apartment.",
+    amount: 50,
+    expense_date: "2024-01-20",
+    payment_method: "Cash",
+    receipt_url: "https://via.placeholder.com/150x100",
+    vendor_name: "Cleaning Service",
+    is_recurring: false,
+    status: "completed",
+    created_at: "2024-01-20T10:00:00Z",
+    updated_at: "2024-01-20T10:00:00Z",
+  },
+  {
+    id: "pe2",
+    property_id: "550e8400-e29b-41d4-a716-446655440001",
+    booking_id: "750e8400-e29b-41d4-a716-446655440001",
+    expense_type: "Maintenance",
+    category: "Repairs",
+    description: "Fixing a leaky faucet.",
+    amount: 20,
+    expense_date: "2024-01-25",
+    payment_method: "Bank Transfer",
+    receipt_url: "https://via.placeholder.com/150x100",
+    vendor_name: "Handyman Service",
+    is_recurring: false,
+    status: "completed",
+    created_at: "2024-01-25T10:00:00Z",
+    updated_at: "2024-01-25T10:00:00Z",
+  },
+  {
+    id: "pe3",
+    property_id: "550e8400-e29b-41d4-a716-446655440002",
+    booking_id: "750e8400-e29b-41d4-a716-446655440002",
+    expense_type: "Utilities",
+    category: "Electricity",
+    description: "Electricity bill for February.",
+    amount: 100,
+    expense_date: "2024-02-01",
+    payment_method: "Credit Card",
+    receipt_url: "https://via.placeholder.com/150x100",
+    vendor_name: "Electricity Company",
+    is_recurring: true,
+    recurring_frequency: "monthly",
+    status: "pending",
+    created_at: "2024-02-01T10:00:00Z",
+    updated_at: "2024-02-01T10:00:00Z",
+  },
+]
+
+// ============================================================================
+// Supabase Client Initialization (Singleton Pattern)
+// ============================================================================
+
+let supabase: SupabaseClient
+
+function getSupabaseClient() {
+  if (!supabase) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+        console.warn("Supabase URL or Anon Key is missing, but not in demo mode. Auth will likely fail.")
+      }
+      // In demo mode or if keys are missing, we don't create a real client
+    } else {
+      supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
+    }
+  }
+  return supabase
+}
+
+// Initialize the client
+const supabaseClient = getSupabaseClient()
+
+// ============================================================================
+// Demo Mode Configuration
+// ============================================================================
+
+export const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || !supabaseClient
+
+// ============================================================================
+// Types and Interfaces
+// ============================================================================
+
+export interface User {
+  id: string
+  email: string
+  full_name: string
+  role: "admin" | "manager" | "operator" | "viewer"
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  last_login?: string
+}
+
+export interface Property {
+  id: string
+  name: string
+  description?: string
+  type: string
+  address: string
+  city: string
+  postal_code?: string
+  country: string
+  bedrooms: number
+  bathrooms: number
+  capacity: number
+  area: number
+  base_price: number
+  cleaning_fee: number
+  security_deposit: number
+  check_in_time: string
+  check_out_time: string
+  min_stay: number
+  max_stay: number
+  is_active: boolean
+  images: string[]
+  amenities: string[]
+  status: string
+  channel_ratings?: any
+  channel_configuration?: any
+  created_at: string
+  updated_at: string
+}
+
+export interface Guest {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  country: string
+  date_of_birth?: string
+  id_number?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Booking {
+  id: string
+  property_id: string
+  guest_id: string
+  check_in: string
+  check_out: string
+  guests_count: number
+  total_amount: number
+  commission_rate?: number
+  commission_amount?: number
+  net_amount?: number
+  status: string
+  booking_source: string
+  special_requests?: string
+  created_at: string
+  updated_at: string
+  property?: Property
+  guest?: Guest
+}
+
+export interface CommissionSetting {
+  id: string
+  owner_id: string
+  channel_name: string
+  channel_type: string
+  commission_rate: number
+  commission_type: string
+  fixed_amount: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BookingPayment {
+  id: string
+  booking_id: string
+  payment_type: string
+  amount: number
+  commission_amount: number
+  net_amount: number
+  payment_method: string
+  payment_status: string
+  payment_date?: string
+  reference_number?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  booking?: Booking
+}
+
+export interface PropertyExpense {
+  id: string
+  property_id: string
+  booking_id?: string
+  expense_type: string
+  category: string
+  description: string
+  amount: number
+  expense_date: string
+  payment_method?: string
+  receipt_url?: string
+  vendor_name?: string
+  is_recurring: boolean
+  recurring_frequency?: string
+  status: string
+  created_at: string
+  updated_at: string
+  property?: Property
+  booking?: Booking
+}
+
+export interface TravelerGuideSection {
+  id: string
+  property_id: string
+  section_type: string
+  title: string
+  content?: string
+  order_index: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  items?: TravelerGuideItem[]
+}
+
+export interface TravelerGuideItem {
+  id: string
+  section_id: string
+  title: string
+  description?: string
+  address?: string
+  phone?: string
+  website?: string
+  image_url?: string
+  order_index: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AvailabilitySetting {
+  id: string
+  property_id: string
+  min_nights: number
+  max_nights: number
+  advance_booking_days: number
+  max_advance_booking_days: number
+  check_in_days: string[]
+  check_out_days: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PricingRule {
+  id: string
+  property_id: string
+  name: string
+  start_date: string
+  end_date: string
+  price_per_night: number
+  minimum_stay: number
+  rule_type: string
+  created_at: string
+}
+
+export interface Channel {
+  id: string
+  name: string
+  type: string
+  api_key?: string
+  is_active: boolean
+  commission_rate: number
+  created_at: string
+}
+
+// ============================================================================
+// Mock Data (for Demo Mode)
+// ============================================================================
+
 export const mockData = {
-  properties: [
-    {
-      id: "550e8400-e29b-41d4-a716-446655440001",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      name: "Apartamento Centro Madrid",
-      description: "Hermoso apartamento en el centro de Madrid con todas las comodidades",
-      address: "Calle Gran Vía 25",
-      city: "Madrid",
-      country: "España",
-      property_type: "apartment",
-      bedrooms: 2,
-      bathrooms: 1,
-      max_guests: 4,
-      base_price: 85.0,
-      cleaning_fee: 25.0,
-      cover_image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-      images: [
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&h=600&fit=crop",
-      ],
-      amenities: ["WiFi", "Aire acondicionado", "Cocina equipada", "TV"],
-      status: "active",
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-15T10:00:00Z",
-    },
-    {
-      id: "550e8400-e29b-41d4-a716-446655440002",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      name: "Loft Barcelona Gótico",
-      description: "Loft moderno en el barrio gótico de Barcelona",
-      address: "Carrer del Bisbe 10",
-      city: "Barcelona",
-      country: "España",
-      property_type: "loft",
-      bedrooms: 1,
-      bathrooms: 1,
-      max_guests: 2,
-      base_price: 95.0,
-      cleaning_fee: 30.0,
-      cover_image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
-      images: [
-        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop",
-      ],
-      amenities: ["WiFi", "Aire acondicionado", "Balcón", "TV"],
-      status: "active",
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-15T10:00:00Z",
-    },
-    {
-      id: "550e8400-e29b-41d4-a716-446655440003",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      name: "Casa Valencia Playa",
-      description: "Casa cerca de la playa en Valencia",
-      address: "Avenida del Puerto 15",
-      city: "Valencia",
-      country: "España",
-      property_type: "house",
-      bedrooms: 3,
-      bathrooms: 2,
-      max_guests: 6,
-      base_price: 120.0,
-      cleaning_fee: 40.0,
-      cover_image: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&h=600&fit=crop",
-      images: [
-        "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&h=600&fit=crop",
-      ],
-      amenities: ["WiFi", "Piscina", "Jardín", "Barbacoa", "TV"],
-      status: "active",
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-15T10:00:00Z",
-    },
-  ],
-  guests: [
-    {
-      id: "650e8400-e29b-41d4-a716-446655440001",
-      first_name: "John",
-      last_name: "Smith",
-      email: "john.smith@email.com",
-      phone: "+1234567890",
-      country: "USA",
-      date_of_birth: "1985-06-15",
-      id_number: "",
-      notes: "",
-      created_at: "2024-01-10T10:00:00Z",
-      updated_at: "2024-01-10T10:00:00Z",
-    },
-    {
-      id: "650e8400-e29b-41d4-a716-446655440002",
-      first_name: "Maria",
-      last_name: "García",
-      email: "maria.garcia@email.com",
-      phone: "+34666777888",
-      country: "España",
-      date_of_birth: "1990-03-22",
-      id_number: "",
-      notes: "",
-      created_at: "2024-01-10T10:00:00Z",
-      updated_at: "2024-01-10T10:00:00Z",
-    },
-    {
-      id: "650e8400-e29b-41d4-a716-446655440003",
-      first_name: "Pierre",
-      last_name: "Dubois",
-      email: "pierre.dubois@email.com",
-      phone: "+33123456789",
-      country: "Francia",
-      date_of_birth: "1988-11-08",
-      id_number: "",
-      notes: "",
-      created_at: "2024-01-10T10:00:00Z",
-      updated_at: "2024-01-10T10:00:00Z",
-    },
-    {
-      id: "650e8400-e29b-41d4-a716-446655440004",
-      first_name: "Anna",
-      last_name: "Mueller",
-      email: "anna.mueller@email.com",
-      phone: "+49987654321",
-      country: "Alemania",
-      date_of_birth: "1992-07-14",
-      id_number: "",
-      notes: "",
-      created_at: "2024-01-10T10:00:00Z",
-      updated_at: "2024-01-10T10:00:00Z",
-    },
-  ],
-  bookings: [
-    {
-      id: "750e8400-e29b-41d4-a716-446655440001",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      guest_id: "650e8400-e29b-41d4-a716-446655440001",
-      check_in: "2024-02-15",
-      check_out: "2024-02-20",
-      guests_count: 2,
-      total_amount: 450.0,
-      commission_rate: 15.0,
-      commission_amount: 67.5,
-      net_amount: 382.5,
-      status: "confirmed",
-      booking_source: "Booking.com",
-      special_requests: "",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-    {
-      id: "750e8400-e29b-41d4-a716-446655440002",
-      property_id: "550e8400-e29b-41d4-a716-446655440002",
-      guest_id: "650e8400-e29b-41d4-a716-446655440002",
-      check_in: "2024-02-10",
-      check_out: "2024-02-14",
-      guests_count: 2,
-      total_amount: 410.0,
-      commission_rate: 12.0,
-      commission_amount: 49.2,
-      net_amount: 360.8,
-      status: "confirmed",
-      booking_source: "Airbnb",
-      special_requests: "",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-    {
-      id: "750e8400-e29b-41d4-a716-446655440003",
-      property_id: "550e8400-e29b-41d4-a716-446655440003",
-      guest_id: "650e8400-e29b-41d4-a716-446655440003",
-      check_in: "2024-03-01",
-      check_out: "2024-03-07",
-      guests_count: 4,
-      total_amount: 760.0,
-      commission_rate: 0.0,
-      commission_amount: 0.0,
-      net_amount: 760.0,
-      status: "pending",
-      booking_source: "Direct",
-      special_requests: "Late check-in requested",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-    {
-      id: "750e8400-e29b-41d4-a716-446655440004",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      guest_id: "650e8400-e29b-41d4-a716-446655440004",
-      check_in: "2024-03-15",
-      check_out: "2024-03-18",
-      guests_count: 2,
-      total_amount: 280.0,
-      commission_rate: 18.0,
-      commission_amount: 50.4,
-      net_amount: 229.6,
-      status: "confirmed",
-      booking_source: "Expedia",
-      special_requests: "",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-  ],
+  properties: mockProperties,
+  guests: mockGuests,
+  bookings: mockBookings,
   commissionSettings: [
     {
       id: "cs1",
@@ -316,62 +633,7 @@ export const mockData = {
       updated_at: "2024-01-20T10:00:00Z",
     },
   ],
-  propertyExpenses: [
-    {
-      id: "pe1",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      booking_id: null,
-      expense_type: "cleaning",
-      category: "operational",
-      description: "Limpieza post check-out",
-      amount: 35.0,
-      expense_date: "2024-02-20",
-      payment_method: "cash",
-      receipt_url: "",
-      vendor_name: "Limpieza Madrid SL",
-      is_recurring: false,
-      recurring_frequency: "",
-      status: "paid",
-      created_at: "2024-02-20T10:00:00Z",
-      updated_at: "2024-02-20T10:00:00Z",
-    },
-    {
-      id: "pe2",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      booking_id: null,
-      expense_type: "maintenance",
-      category: "maintenance",
-      description: "Reparación grifo cocina",
-      amount: 85.0,
-      expense_date: "2024-02-18",
-      payment_method: "transfer",
-      receipt_url: "",
-      vendor_name: "Fontanería Express",
-      is_recurring: false,
-      recurring_frequency: "",
-      status: "paid",
-      created_at: "2024-02-18T10:00:00Z",
-      updated_at: "2024-02-18T10:00:00Z",
-    },
-    {
-      id: "pe3",
-      property_id: "550e8400-e29b-41d4-a716-446655440003",
-      booking_id: null,
-      expense_type: "utilities",
-      category: "operational",
-      description: "Factura electricidad febrero",
-      amount: 120.0,
-      expense_date: "2024-02-28",
-      payment_method: "transfer",
-      receipt_url: "",
-      vendor_name: "Iberdrola",
-      is_recurring: true,
-      recurring_frequency: "monthly",
-      status: "pending",
-      created_at: "2024-02-28T10:00:00Z",
-      updated_at: "2024-02-28T10:00:00Z",
-    },
-  ],
+  propertyExpenses: mockExpenses,
   travelerGuideSections: [
     {
       id: "tgs1",
@@ -558,192 +820,20 @@ export const mockData = {
   ],
 }
 
-// Check if we're in demo mode (no proper Supabase configuration)
-export const isDemoMode = 
-  supabaseUrl === "https://demo.supabase.co" || 
-  supabaseAnonKey === "demo-key" ||
-  process.env.NEXT_PUBLIC_DEMO_MODE === "true"
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
-// Types
-export interface Property {
-  id: string
-  owner_id: string
-  name: string
-  description: string
-  address: string
-  city: string
-  country: string
-  property_type: string
-  bedrooms: number
-  bathrooms: number
-  max_guests: number
-  base_price: number
-  cleaning_fee: number
-  cover_image?: string
-  images: string[]
-  amenities: string[]
-  status: string
-  created_at: string
-  updated_at: string
+/**
+ * Clears expired tokens by signing out the user.
+ * This is a workaround for potential token refresh issues.
+ */
+export async function clearExpiredTokens() {
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut()
+    console.log("Expired tokens cleared, user signed out.")
+  }
 }
 
-export interface Guest {
-  id: string
-  first_name: string
-  last_name: string
-  email: string
-  phone: string
-  country: string
-  date_of_birth?: string
-  id_number?: string
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface Booking {
-  id: string
-  property_id: string
-  guest_id: string
-  check_in: string
-  check_out: string
-  guests_count: number
-  total_amount: number
-  commission_rate?: number
-  commission_amount?: number
-  net_amount?: number
-  status: string
-  booking_source: string
-  special_requests?: string
-  created_at: string
-  updated_at: string
-  property?: Property
-  guest?: Guest
-}
-
-export interface CommissionSetting {
-  id: string
-  owner_id: string
-  channel_name: string
-  channel_type: string
-  commission_rate: number
-  commission_type: string
-  fixed_amount: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface BookingPayment {
-  id: string
-  booking_id: string
-  payment_type: string
-  amount: number
-  commission_amount: number
-  net_amount: number
-  payment_method: string
-  payment_status: string
-  payment_date?: string
-  reference_number?: string
-  notes?: string
-  created_at: string
-  updated_at: string
-  booking?: Booking
-}
-
-export interface PropertyExpense {
-  id: string
-  property_id: string
-  booking_id?: string
-  expense_type: string
-  category: string
-  description: string
-  amount: number
-  expense_date: string
-  payment_method?: string
-  receipt_url?: string
-  vendor_name?: string
-  is_recurring: boolean
-  recurring_frequency?: string
-  status: string
-  created_at: string
-  updated_at: string
-  property?: Property
-  booking?: Booking
-}
-
-export interface TravelerGuideSection {
-  id: string
-  property_id: string
-  section_type: string
-  title: string
-  content?: string
-  order_index: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  items?: TravelerGuideItem[]
-}
-
-export interface TravelerGuideItem {
-  id: string
-  section_id: string
-  title: string
-  description?: string
-  address?: string
-  phone?: string
-  website?: string
-  image_url?: string
-  order_index: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface AvailabilitySetting {
-  id: string
-  property_id: string
-  min_nights: number
-  max_nights: number
-  advance_booking_days: number
-  max_advance_booking_days: number
-  check_in_days: string[]
-  check_out_days: string[]
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface PricingRule {
-  id: string
-  property_id: string
-  name: string
-  start_date: string
-  end_date: string
-  price_per_night: number
-  minimum_stay: number
-  rule_type: string
-  created_at: string
-}
-
-export interface Channel {
-  id: string
-  name: string
-  type: string
-  api_key?: string
-  is_active: boolean
-  commission_rate: number
-  created_at: string
-}
-
-// User interface for the users table
-export interface User {
-  id: string
-  email: string
-  full_name: string
-  role: "admin" | "manager" | "operator" | "viewer"
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  last_login?: string
-}
+// Export the single instance of the client
+export { supabaseClient as supabase }

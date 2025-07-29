@@ -313,7 +313,7 @@ export default function Dashboard() {
                         {property.city}, {property.country}
                       </p>
                       <p className="text-xs text-gray-400">
-                        {property.bedrooms} hab • {property.max_guests} huéspedes
+                        {property.bedrooms} hab • {property.capacity} huéspedes
                       </p>
                     </div>
                   </div>
