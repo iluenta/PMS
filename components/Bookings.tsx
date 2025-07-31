@@ -59,8 +59,8 @@ export default function Bookings() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [propertyFilter, setPropertyFilter] = useState<string>("all")
   const [channelFilter, setChannelFilter] = useState<string>("all")
-  const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
-  const [sortFilter, setSortFilter] = useState<string>("newest")
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>("pending")
+  const [sortFilter, setSortFilter] = useState<string>("checkin_asc")
 
   // Filtered and sorted bookings
   const filteredBookings = useMemo(() => {
@@ -105,6 +105,8 @@ export default function Bookings() {
         const daysDiff = Math.ceil((checkInDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
         
         switch (dateRangeFilter) {
+          case "pending":
+            return checkInDate > today
           case "today":
             return daysDiff === 0
           case "this_week":
@@ -438,9 +440,10 @@ export default function Bookings() {
             <Label htmlFor="dateRange">Rango de fechas</Label>
             <Select value={dateRangeFilter} onValueChange={setDateRangeFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Todas las fechas" />
+                <SelectValue placeholder="Pendientes" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="pending">Pendientes</SelectItem>
                 <SelectItem value="all">Todas las fechas</SelectItem>
                 <SelectItem value="today">Hoy</SelectItem>
                 <SelectItem value="this_week">Esta semana</SelectItem>
@@ -455,7 +458,7 @@ export default function Bookings() {
             <Label htmlFor="sort">Ordenar</Label>
             <Select value={sortFilter} onValueChange={setSortFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Más antiguas primero" />
+                <SelectValue placeholder="Check-in (próximo)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="newest">Más recientes primero</SelectItem>
@@ -643,6 +646,29 @@ export default function Bookings() {
                     </div>
                   )}
                 </div>
+
+                {/* Solicitudes Especiales y Notas */}
+                {(booking.special_requests || booking.notes) && (
+                  <div className="border-t pt-3 space-y-2">
+                    {booking.special_requests && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-gray-700">Solicitudes Especiales</p>
+                        <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
+                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.special_requests}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {booking.notes && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-gray-700">Notas</p>
+                        <div className="p-2 bg-gray-50 border border-gray-200 rounded-md">
+                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.notes}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1578,6 +1604,8 @@ function BookingDialog({
                   </div>
                 </div>
         </div>
+        
+
         
         {/* Tercera fila: Notas y Solicitudes */}
         <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">

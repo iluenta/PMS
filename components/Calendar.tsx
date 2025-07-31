@@ -1,11 +1,22 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { supabase, isDemoMode, mockData, type Booking, type Property } from "@/lib/supabase"
-import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
+import { supabase, type Booking, type Property } from "@/lib/supabase"
+import { CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react"
+
+interface CalendarBooking {
+  id: string
+  guest_name: string
+  check_in: Date
+  check_out: Date
+  property_name: string
+  total_amount: number
+  status: string
+  booking: Booking
+}
 
 export default function Calendar() {
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -19,33 +30,75 @@ export default function Calendar() {
 
   const fetchData = async () => {
     try {
-      if (isDemoMode) {
-        const mockBookingsWithRelations = mockData.bookings
-          .filter((booking) => booking.status === "confirmed")
-          .map((booking) => ({
-            ...booking,
-            property: mockData.properties.find((p) => p.id === booking.property_id),
-            guest: mockData.guests.find((g) => g.id === booking.guest_id),
-          }))
-
-        setBookings(mockBookingsWithRelations)
-        setProperties(mockData.properties.filter((p) => p.status === "active"))
-        return
-      }
-
-      const { data: bookingsData } = await supabase
-        .from("bookings")
+      console.log("🔄 Fetching calendar data from reservations...")
+      
+      // Fetch reservations data with property_channel information
+      const { data: reservationsData, error: reservationsError } = await supabase
+        .from("reservations")
         .select(`
           *,
-          property:properties(*),
-          guest:guests(*)
+          property_channels!reservations_property_channel_fkey(
+            *,
+            distribution_channels(*)
+          )
         `)
         .eq("status", "confirmed")
+        .order("created_at", { ascending: false })
 
-      const { data: propertiesData } = await supabase.from("properties").select("*").eq("status", "active")
+      console.log("📊 Reservations data:", reservationsData)
+      console.log("❌ Reservations error:", reservationsError)
 
-      if (bookingsData) setBookings(bookingsData)
+      // Fetch properties
+      const { data: propertiesData, error: propertiesError } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("status", "active")
+
+      console.log("✅ Properties fetched:", propertiesData?.length || 0)
+      console.log("❌ Properties error:", propertiesError)
+
+      if (reservationsData) {
+        // Transform reservations data to match our Booking interface
+        const transformedReservations = reservationsData.map((reservation) => {
+          return {
+            ...reservation,
+            guest_id: 'guest-jsonb', // Since guest is JSONB, we use a placeholder
+            guests_count: reservation.guests || reservation.adults + reservation.children || 1,
+            booking_source: reservation.property_channels?.distribution_channels?.name || reservation.external_source || 'Direct',
+            external_id: reservation.external_id || null,
+            // Ensure commission fields are properly included
+            channel_commission: reservation.channel_commission || 0,
+            collection_commission: reservation.collection_commission || 0,
+            // Transform the JSONB guest field to match expected structure
+            property: propertiesData?.find(p => p.id === reservation.property_id) || null,
+            guest: reservation.guest ? {
+              id: 'guest-jsonb',
+              first_name: reservation.guest.name ? reservation.guest.name.split(' ')[0] : '',
+              last_name: reservation.guest.name ? reservation.guest.name.split(' ').slice(1).join(' ') : '',
+              email: reservation.guest.email || '',
+              phone: reservation.guest.phone || '',
+              country: reservation.guest.country || '',
+              date_of_birth: null,
+              id_number: reservation.guest.document_number || '',
+              notes: `${reservation.guest.document_type || ''}: ${reservation.guest.document_number || ''}`.trim(),
+              created_at: reservation.created_at,
+              updated_at: reservation.updated_at
+            } : null
+          }
+        })
+        setBookings(transformedReservations)
+      }
+      
       if (propertiesData) setProperties(propertiesData)
+
+      // If no data exists, show information about it
+      if (!reservationsData || reservationsData.length === 0) {
+        console.log("ℹ️ No reservations found in database")
+      }
+      if (!propertiesData || propertiesData.length === 0) {
+        console.log("ℹ️ No properties found in database")
+      }
+
     } catch (error) {
       console.error("Error fetching data:", error)
     } finally {
@@ -53,13 +106,30 @@ export default function Calendar() {
     }
   }
 
+  const calendarBookings = useMemo(() => {
+    return bookings.map((booking) => ({
+      id: booking.id,
+      guest_name: `${booking.guest?.first_name || ''} ${booking.guest?.last_name || ''}`.trim(),
+      check_in: new Date(booking.check_in),
+      check_out: new Date(booking.check_out),
+      property_name: booking.property?.name || 'Sin nombre',
+      total_amount: booking.total_amount,
+      status: booking.status,
+      booking: booking
+    })) as CalendarBooking[]
+  }, [bookings])
+
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
     const month = date.getMonth()
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    
+    // Calculate starting day of week (0 = Sunday, 1 = Monday, etc.)
+    // We want Monday = 0, Tuesday = 1, ..., Sunday = 6
+    let startingDayOfWeek = firstDay.getDay()
+    startingDayOfWeek = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1
 
     const days = []
 
@@ -79,13 +149,36 @@ export default function Calendar() {
   const getBookingsForDate = (date: Date) => {
     if (!date) return []
 
-    const dateStr = date.toISOString().split("T")[0]
-    return bookings.filter((booking) => {
-      const checkIn = new Date(booking.check_in)
-      const checkOut = new Date(booking.check_out)
-      const currentDate = new Date(dateStr)
+    // Normalize the current date to start of day
+    const currentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    
+    return calendarBookings.filter((booking) => {
+      // Normalize booking dates to start of day
+      const checkInDate = new Date(booking.check_in.getFullYear(), booking.check_in.getMonth(), booking.check_in.getDate())
+      const checkOutDate = new Date(booking.check_out.getFullYear(), booking.check_out.getMonth(), booking.check_out.getDate())
+      
+      // A booking is active on a date if:
+      // - The date is >= check-in date AND
+      // - The date is < check-out date (exclusive)
+      return currentDate >= checkInDate && currentDate < checkOutDate
+    })
+  }
 
-      return currentDate >= checkIn && currentDate < checkOut
+  const getBookingsForDateRange = (startDate: Date, endDate: Date) => {
+    // Normalize the range dates to start of day
+    const normalizedStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+    const normalizedEndDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+    
+    return calendarBookings.filter((booking) => {
+      // Normalize booking dates to start of day
+      const checkInDate = new Date(booking.check_in.getFullYear(), booking.check_in.getMonth(), booking.check_in.getDate())
+      const checkOutDate = new Date(booking.check_out.getFullYear(), booking.check_out.getMonth(), booking.check_out.getDate())
+      
+      // Check if booking overlaps with the date range
+      return (
+        (checkInDate <= normalizedEndDate && checkOutDate > normalizedStartDate) ||
+        (checkInDate >= normalizedStartDate && checkInDate < normalizedEndDate)
+      )
     })
   }
 
@@ -116,7 +209,33 @@ export default function Calendar() {
     "Diciembre",
   ]
 
-  const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+  const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+  const upcomingArrivals = useMemo(() => {
+    const today = new Date()
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+    
+    return calendarBookings
+      .filter((booking) => {
+        const checkIn = new Date(booking.check_in)
+        return checkIn >= today && checkIn <= nextWeek
+      })
+      .sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
+      .slice(0, 5)
+  }, [calendarBookings])
+
+  const upcomingDepartures = useMemo(() => {
+    const today = new Date()
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+    
+    return calendarBookings
+      .filter((booking) => {
+        const checkOut = new Date(booking.check_out)
+        return checkOut >= today && checkOut <= nextWeek
+      })
+      .sort((a, b) => new Date(a.check_out).getTime() - new Date(b.check_out).getTime())
+      .slice(0, 5)
+  }, [calendarBookings])
 
   if (loading) {
     return (
@@ -162,7 +281,7 @@ export default function Calendar() {
           <div className="grid grid-cols-7 gap-1">
             {getDaysInMonth(currentDate).map((date, index) => {
               if (!date) {
-                return <div key={index} className="p-2 h-24"></div>
+                return <div key={index} className="p-2 h-32"></div>
               }
 
               const dayBookings = getBookingsForDate(date)
@@ -171,28 +290,41 @@ export default function Calendar() {
               return (
                 <div
                   key={index}
-                  className={`p-2 h-24 border rounded-lg ${
+                  className={`p-2 h-32 border rounded-lg ${
                     isToday ? "bg-blue-50 border-blue-200" : "bg-white border-gray-200"
-                  } overflow-hidden`}
+                  } overflow-hidden relative`}
                 >
                   <div className={`text-sm font-medium mb-1 ${isToday ? "text-blue-600" : "text-gray-900"}`}>
                     {date.getDate()}
                   </div>
 
-                  <div className="space-y-1">
-                    {dayBookings.slice(0, 2).map((booking, bookingIndex) => (
+                  {/* Booking bars */}
+                  <div className="space-y-1 mt-1">
+                    {dayBookings.map((booking, bookingIndex) => (
                       <div
-                        key={bookingIndex}
-                        className="text-xs p-1 rounded bg-green-100 text-green-800 truncate"
-                        title={`${booking.guest?.first_name} ${booking.guest?.last_name} - ${booking.property?.name}`}
+                        key={booking.id}
+                        className="h-6 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center justify-between"
+                        style={{
+                          backgroundColor: booking.status === 'confirmed' ? '#3b82f6' : 
+                                        booking.status === 'pending' ? '#f59e0b' : '#ef4444'
+                        }}
                       >
-                        {booking.property?.name}
+                        <span className="truncate font-medium">
+                          {booking.guest_name}
+                        </span>
+                        <span className="text-xs opacity-75">
+                          €{booking.total_amount}
+                        </span>
                       </div>
                     ))}
-                    {dayBookings.length > 2 && (
-                      <div className="text-xs text-gray-500">+{dayBookings.length - 2} más</div>
-                    )}
                   </div>
+
+                  {/* Available indicator */}
+                  {dayBookings.length === 0 && (
+                    <div className="absolute bottom-1 left-1 right-1">
+                      <div className="text-xs text-gray-400 text-center">Disponible</div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -208,29 +340,35 @@ export default function Calendar() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {bookings
-                .filter((booking) => {
-                  const checkIn = new Date(booking.check_in)
-                  const today = new Date()
-                  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-                  return checkIn >= today && checkIn <= nextWeek
-                })
-                .sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
-                .slice(0, 5)
-                .map((booking) => (
-                  <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">
-                        {booking.guest?.first_name} {booking.guest?.last_name}
+              {upcomingArrivals.length > 0 ? (
+                upcomingArrivals.map((booking) => (
+                  <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg bg-green-50 border-green-200">
+                    <div className="flex-1">
+                      <p className="font-medium text-green-800">
+                        {booking.guest_name}
                       </p>
-                      <p className="text-sm text-gray-500">{booking.property?.name}</p>
+                      <p className="text-sm text-green-600">{booking.property_name}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{new Date(booking.check_in).toLocaleDateString()}</p>
-                      <Badge variant="outline">Check-in</Badge>
+                      <p className="text-sm font-medium text-green-800">
+                        {booking.check_in.toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        })}
+                      </p>
+                      <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                        Check-in
+                      </Badge>
                     </div>
                   </div>
-                ))}
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <CalendarIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <p>No hay llegadas programadas</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -242,29 +380,35 @@ export default function Calendar() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {bookings
-                .filter((booking) => {
-                  const checkOut = new Date(booking.check_out)
-                  const today = new Date()
-                  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-                  return checkOut >= today && checkOut <= nextWeek
-                })
-                .sort((a, b) => new Date(a.check_out).getTime() - new Date(b.check_out).getTime())
-                .slice(0, 5)
-                .map((booking) => (
-                  <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">
-                        {booking.guest?.first_name} {booking.guest?.last_name}
+              {upcomingDepartures.length > 0 ? (
+                upcomingDepartures.map((booking) => (
+                  <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg bg-orange-50 border-orange-200">
+                    <div className="flex-1">
+                      <p className="font-medium text-orange-800">
+                        {booking.guest_name}
                       </p>
-                      <p className="text-sm text-gray-500">{booking.property?.name}</p>
+                      <p className="text-sm text-orange-600">{booking.property_name}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{new Date(booking.check_out).toLocaleDateString()}</p>
-                      <Badge variant="secondary">Check-out</Badge>
+                      <p className="text-sm font-medium text-orange-800">
+                        {booking.check_out.toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        })}
+                      </p>
+                      <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                        Check-out
+                      </Badge>
                     </div>
                   </div>
-                ))}
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <CalendarIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <p>No hay salidas programadas</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
