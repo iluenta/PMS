@@ -106,9 +106,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-gray-100/40">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:block lg:w-72">
+    <div className="flex min-h-screen w-full bg-gray-100/40 overflow-x-hidden">
+      {/* Desktop Sidebar - FIJO EN DESKTOP */}
+      <aside className="hidden lg:block lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:w-72 lg:z-20">
         <SidebarContent />
       </aside>
 
@@ -133,7 +133,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="flex flex-col flex-1">
+      {/* Content Area - CON MARGEN EN DESKTOP */}
+      <div className="flex flex-col flex-1 lg:ml-72 max-w-full">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
           <Button
             variant="outline"
@@ -151,7 +152,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {user.email}
           </span>
         </header>
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="flex-1 space-y-4 p-4 lg:p-6">
+          {children}
+        </main>
       </div>
       <Toaster />
     </div>

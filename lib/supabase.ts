@@ -5,17 +5,17 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js"
 // ============================================================================
 
 const mockProperties = [
-  {
-    id: "550e8400-e29b-41d4-a716-446655440001",
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
     name: "Luxury Apartment in Madrid",
     description: "A spacious and modern apartment in the heart of Madrid, perfect for a family or a group of friends.",
     type: "Apartment",
     address: "Calle de Ruiz de Alarcón, 23, 28014 Madrid",
-    city: "Madrid",
+      city: "Madrid",
     postal_code: "28014",
     country: "Spain",
-    bedrooms: 2,
-    bathrooms: 1,
+      bedrooms: 2,
+      bathrooms: 1,
     capacity: 4,
     area: 60,
     base_price: 100,
@@ -26,13 +26,13 @@ const mockProperties = [
     min_stay: 1,
     max_stay: 30,
     is_active: true,
-    images: [
+      images: [
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
     ],
     amenities: ["WiFi", "Aire acondicionado", "Cocina completa", "Baño privado"],
-    status: "active",
+      status: "active",
     channel_ratings: {
       Booking: 4.5,
       Airbnb: 4.8,
@@ -54,18 +54,18 @@ const mockProperties = [
     },
     created_at: "2024-01-01T10:00:00Z",
     updated_at: "2024-01-01T10:00:00Z",
-  },
-  {
-    id: "550e8400-e29b-41d4-a716-446655440002",
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440002",
     name: "Cozy Studio in Barcelona",
     description: "A cozy and comfortable studio in the Gothic Quarter of Barcelona.",
     type: "Studio",
     address: "Calle de Cuchilleros, 17, 28005 Barcelona",
-    city: "Barcelona",
+      city: "Barcelona",
     postal_code: "08003",
     country: "Spain",
     bedrooms: 0,
-    bathrooms: 1,
+      bathrooms: 1,
     capacity: 2,
     area: 30,
     base_price: 50,
@@ -76,13 +76,13 @@ const mockProperties = [
     min_stay: 1,
     max_stay: 30,
     is_active: true,
-    images: [
+      images: [
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
     ],
     amenities: ["WiFi", "Aire acondicionado", "Baño privado"],
-    status: "active",
+      status: "active",
     channel_ratings: {
       Booking: 4.0,
       Airbnb: 4.5,
@@ -102,16 +102,16 @@ const mockProperties = [
         channel_type: "ota",
       },
     },
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "550e8400-e29b-41d4-a716-446655440003",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440003",
     name: "Modern Loft in Valencia",
     description: "A modern and stylish loft in the heart of Valencia, close to the beach.",
     type: "Loft",
     address: "Calle de San Vicente, 10, 46003 Valencia",
-    city: "Valencia",
+      city: "Valencia",
     postal_code: "46003",
     country: "Spain",
     bedrooms: 1,
@@ -126,7 +126,7 @@ const mockProperties = [
     min_stay: 1,
     max_stay: 30,
     is_active: true,
-    images: [
+      images: [
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
       "https://via.placeholder.com/600x400",
@@ -141,7 +141,7 @@ const mockProperties = [
 const mockGuests = [
   {
     id: "550e8400-e29b-41d4-a716-446655440001",
-    first_name: "John",
+      first_name: "John",
     last_name: "Doe",
     email: "john.doe@example.com",
     phone: "+34 600 123 456",
@@ -162,10 +162,10 @@ const mockGuests = [
     date_of_birth: "1995-05-10",
     id_number: "87654321Y",
     notes: "VIP guest",
-    created_at: "2024-01-10T10:00:00Z",
-    updated_at: "2024-01-10T10:00:00Z",
-  },
-  {
+      created_at: "2024-01-10T10:00:00Z",
+      updated_at: "2024-01-10T10:00:00Z",
+    },
+    {
     id: "550e8400-e29b-41d4-a716-446655440003",
     first_name: "Peter",
     last_name: "Jones",
@@ -181,47 +181,47 @@ const mockGuests = [
 ]
 
 const mockBookings = [
-  {
-    id: "750e8400-e29b-41d4-a716-446655440001",
-    property_id: "550e8400-e29b-41d4-a716-446655440001",
+    {
+      id: "750e8400-e29b-41d4-a716-446655440001",
+      property_id: "550e8400-e29b-41d4-a716-446655440001",
     guest_id: "550e8400-e29b-41d4-a716-446655440001",
     check_in: "2024-01-20",
     check_out: "2024-01-25",
-    guests_count: 2,
+      guests_count: 2,
     total_amount: 500,
-    commission_rate: 15.0,
+      commission_rate: 15.0,
     commission_amount: 75,
     net_amount: 425,
     status: "completed",
-    booking_source: "Booking.com",
+      booking_source: "Booking.com",
     special_requests: "No special requests",
-    created_at: "2024-01-20T10:00:00Z",
+      created_at: "2024-01-20T10:00:00Z",
     updated_at: "2024-01-25T10:00:00Z",
     property: mockProperties[0],
     guest: mockGuests[0],
-  },
-  {
-    id: "750e8400-e29b-41d4-a716-446655440002",
-    property_id: "550e8400-e29b-41d4-a716-446655440002",
+    },
+    {
+      id: "750e8400-e29b-41d4-a716-446655440002",
+      property_id: "550e8400-e29b-41d4-a716-446655440002",
     guest_id: "550e8400-e29b-41d4-a716-446655440002",
     check_in: "2024-02-14",
     check_out: "2024-02-16",
     guests_count: 1,
     total_amount: 200,
-    commission_rate: 12.0,
+      commission_rate: 12.0,
     commission_amount: 24,
     net_amount: 176,
     status: "completed",
-    booking_source: "Airbnb",
+      booking_source: "Airbnb",
     special_requests: "Late check-in after 20:00",
     created_at: "2024-02-14T10:00:00Z",
     updated_at: "2024-02-16T10:00:00Z",
     property: mockProperties[1],
     guest: mockGuests[1],
-  },
-  {
-    id: "750e8400-e29b-41d4-a716-446655440003",
-    property_id: "550e8400-e29b-41d4-a716-446655440003",
+    },
+    {
+      id: "750e8400-e29b-41d4-a716-446655440003",
+      property_id: "550e8400-e29b-41d4-a716-446655440003",
     guest_id: "550e8400-e29b-41d4-a716-446655440003",
     check_in: "2024-01-20",
     check_out: "2024-01-22",
@@ -230,7 +230,7 @@ const mockBookings = [
     commission_rate: 18.0,
     commission_amount: 72,
     net_amount: 328,
-    status: "pending",
+      status: "pending",
     booking_source: "Expedia",
     special_requests: "Breakfast included",
     created_at: "2024-01-20T10:00:00Z",
@@ -255,12 +255,12 @@ const mockExpenses = [
     vendor_name: "Cleaning Service",
     is_recurring: false,
     status: "completed",
-    created_at: "2024-01-20T10:00:00Z",
-    updated_at: "2024-01-20T10:00:00Z",
-  },
-  {
+      created_at: "2024-01-20T10:00:00Z",
+      updated_at: "2024-01-20T10:00:00Z",
+    },
+    {
     id: "pe2",
-    property_id: "550e8400-e29b-41d4-a716-446655440001",
+      property_id: "550e8400-e29b-41d4-a716-446655440001",
     booking_id: "750e8400-e29b-41d4-a716-446655440001",
     expense_type: "Maintenance",
     category: "Repairs",
@@ -403,6 +403,9 @@ export interface Booking {
   total_amount: number
   commission_rate?: number
   commission_amount?: number
+  channel_commission?: number
+  collection_commission?: number
+  total_commission?: number
   net_amount?: number
   status: string
   booking_source: string
@@ -832,6 +835,170 @@ export async function clearExpiredTokens() {
   if (supabaseClient) {
     await supabaseClient.auth.signOut()
     console.log("Expired tokens cleared, user signed out.")
+  }
+}
+
+// ============================================================================
+// Commission Calculation Functions
+// ============================================================================
+
+/**
+ * Get commission rates for a specific property and channel
+ */
+export async function getChannelCommissions(propertyId: string, channelName: string) {
+  try {
+    console.log("🔄 Getting channel commissions for:", { propertyId, channelName })
+
+    // First, get the channel ID from distribution_channels
+    const { data: channels, error: channelError } = await supabaseClient
+      .from("distribution_channels")
+      .select("id")
+      .eq("name", channelName)
+
+    console.log("📊 Channel data:", channels)
+    console.log("❌ Channel error:", channelError)
+
+    if (!channels || channelError || channels.length === 0) {
+      console.log("⚠️ Channel not found, using default commission rates")
+      // Return default commission rates based on channel name
+      const defaultCommissionRates: Record<string, { charge: number; sale: number }> = {
+        "Booking.com": { charge: 3.0, sale: 15.0 },
+        "Airbnb": { charge: 3.0, sale: 12.0 },
+        "Expedia": { charge: 4.0, sale: 18.0 },
+        "VRBO": { charge: 3.0, sale: 15.0 },
+        "Direct": { charge: 0.0, sale: 0.0 },
+      }
+      return defaultCommissionRates[channelName] || { charge: 0.0, sale: 0.0 }
+    }
+
+    const channel = channels[0] // Take the first match
+
+    // Then get the commission rates from property_channels
+    const { data: propertyChannel, error: propertyChannelError } = await supabaseClient
+      .from("property_channels")
+      .select("commission_charge_percentage, commission_sale_percentage")
+      .eq("property_id", propertyId)
+      .eq("channel_id", channel.id)
+
+    console.log("📊 Property channel commission data:", propertyChannel)
+    console.log("❌ Property channel commission error:", propertyChannelError)
+
+    if (propertyChannel && propertyChannel.length > 0) {
+      const commissionData = propertyChannel[0]
+      return {
+        charge: commissionData.commission_charge_percentage || 0.0,
+        sale: commissionData.commission_sale_percentage || 0.0,
+      }
+    }
+
+    // Return default rates if no property-specific rates found
+    console.log("⚠️ Property-specific commission rates not found, using defaults")
+    const defaultCommissionRates: Record<string, { charge: number; sale: number }> = {
+      "Booking.com": { charge: 3.0, sale: 15.0 },
+      "Airbnb": { charge: 3.0, sale: 12.0 },
+      "Expedia": { charge: 4.0, sale: 18.0 },
+      "VRBO": { charge: 3.0, sale: 15.0 },
+      "Direct": { charge: 0.0, sale: 0.0 },
+    }
+    return defaultCommissionRates[channelName] || { charge: 0.0, sale: 0.0 }
+  } catch (error) {
+    console.error("Error getting channel commissions:", error)
+    // Return safe defaults
+    return { charge: 0.0, sale: 0.0 }
+  }
+}
+
+/**
+ * Calculate commission amounts for a booking
+ */
+export function calculateBookingCommissions(
+  totalAmount: number,
+  commissionRates: { charge: number; sale: number }
+) {
+  const saleCommission = (totalAmount * commissionRates.sale) / 100
+  const chargeCommission = (totalAmount * commissionRates.charge) / 100
+  const totalCommission = saleCommission + chargeCommission
+  const netAmount = totalAmount - totalCommission
+
+  return {
+    commission_rate: commissionRates.sale,
+    commission_amount: saleCommission,
+    collection_commission: chargeCommission,
+    total_commission: totalCommission,
+    net_amount: netAmount,
+  }
+}
+
+/**
+ * Calculate full booking financial details
+ */
+export async function calculateBookingFinancials(
+  propertyId: string,
+  channelName: string,
+  totalAmount: number
+) {
+  const commissionRates = await getChannelCommissions(propertyId, channelName)
+  return calculateBookingCommissions(totalAmount, commissionRates)
+}
+
+/**
+ * Get available distribution channels for a property
+ */
+export async function getPropertyChannels(propertyId: string) {
+  try {
+    console.log("🔄 Getting property channels for property:", propertyId)
+
+    const { data, error } = await supabaseClient
+      .from("property_channels")
+      .select(`
+        distribution_channels (
+          id,
+          name
+        )
+      `)
+      .eq("property_id", propertyId)
+      .eq("is_enabled", true)
+
+    console.log("📊 Property channels data:", data)
+    console.log("❌ Property channels error:", error)
+
+    if (error) {
+      console.error("Error fetching property channels:", error)
+      // Return only Direct channel if property_channels query fails
+      return [
+        { id: "direct", name: "Direct" }
+      ]
+    }
+
+    // Transform the data to match expected format
+    if (data && Array.isArray(data)) {
+      const channels = data.map((item) => ({
+        id: item.distribution_channels?.id || "unknown",
+        name: item.distribution_channels?.name || "Unknown",
+      }))
+      
+      // Always include Direct channel
+      const directChannel = { id: "direct", name: "Direct" }
+      const allChannels = [directChannel, ...channels]
+      
+      // Remove duplicates based on name
+      const uniqueChannels = allChannels.filter((channel, index, self) => 
+        index === self.findIndex(c => c.name === channel.name)
+      )
+      
+      console.log("✅ Final channels for booking form:", uniqueChannels)
+      return uniqueChannels
+    }
+
+    // Return only Direct channel if no data
+    return [
+      { id: "direct", name: "Direct" }
+    ]
+  } catch (error) {
+    console.error("Error getting property channels:", error)
+    return [
+      { id: "direct", name: "Direct" }
+    ]
   }
 }
 

@@ -22,10 +22,9 @@ import {
   type Booking, 
   type Property, 
   type Guest, 
-  calculateBookingFinancials
+  calculateBookingFinancials,
+  getPropertyChannels
 } from "@/lib/supabase"
-import { getPropertyChannels } from "@/lib/channels"
-import type { PropertyChannelWithDetails } from "@/types/channels"
 import { 
   Calendar, 
   Plus, 
@@ -626,14 +625,18 @@ export default function Bookings() {
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Venta</span>
-                        <span className="text-orange-600">€{(booking.channel_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Cobro</span>
-                        <span className="text-red-600">€{(booking.collection_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
+                      {booking.channel_commission && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Comisión Venta</span>
+                          <span className="text-orange-600">€{(booking.channel_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
+                        </div>
+                      )}
+                      {booking.collection_commission && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Comisión Cobro</span>
+                          <span className="text-red-600">€{(booking.collection_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
+                        </div>
+                      )}
                       {booking.net_amount && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Neto</span>
@@ -706,14 +709,8 @@ function BookingDialog({
     collection_commission: 0,
   })
   
-  const [availableChannels, setAvailableChannels] = useState<PropertyChannelWithDetails[]>([])
+  const [availableChannels, setAvailableChannels] = useState<Array<{id: string, name: string}>>([])
   const [calculatingCommissions, setCalculatingCommissions] = useState(false)
-  const [dateError, setDateError] = useState<string>("")
-  const [externalIdError, setExternalIdError] = useState<string>("")
-  const [commissionPercentages, setCommissionPercentages] = useState<{
-    sale: number | null;
-    charge: number | null;
-  }>({ sale: null, charge: null })
 
   useEffect(() => {
     if (booking) {
@@ -789,30 +786,12 @@ function BookingDialog({
   }, [formData.base_amount, formData.taxes, formData.cleaning_fee])
 
   // Recalculate commissions when property, channel, or base_amount changes
-  // Only recalculate if we're creating a new booking (not editing) and using old commission system
+  // Only recalculate if we're creating a new booking (not editing)
   useEffect(() => {
-    if (formData.property_id && formData.booking_source && !booking && formData.booking_source === "Direct") {
+    if (formData.property_id && formData.booking_source && !booking) {
       calculateCommissions()
     }
   }, [formData.property_id, formData.booking_source, formData.base_amount, booking])
-
-  // Recalcular comisiones cuando cambie el precio base y haya porcentajes configurados
-  // Solo para nuevas reservas, no para edición
-  useEffect(() => {
-    if (formData.booking_source !== "Direct" && commissionPercentages.sale !== null && commissionPercentages.charge !== null && !booking) {
-      const baseAmount = formData.base_amount || 0
-      const saleCommission = commissionPercentages.sale ? 
-        Math.round((baseAmount * commissionPercentages.sale / 100) * 100) / 100 : 0
-      const chargeCommission = commissionPercentages.charge ? 
-        Math.round((baseAmount * commissionPercentages.charge / 100) * 100) / 100 : 0
-
-      setFormData(prev => ({
-        ...prev,
-        channel_commission: saleCommission,
-        collection_commission: chargeCommission
-      }))
-    }
-  }, [formData.base_amount, commissionPercentages, booking])
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
@@ -849,23 +828,6 @@ function BookingDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar fechas antes de continuar
-    if (formData.check_in && formData.check_out) {
-      const start = new Date(formData.check_in)
-      const end = new Date(formData.check_out)
-      
-      if (end <= start) {
-        setDateError("La fecha de check-out debe ser posterior a la fecha de check-in")
-        return
-      }
-    }
-
-    // Validar ID de reserva externa cuando el canal no es "Propio"
-    if (formData.booking_source !== "Direct" && !formData.external_id?.trim()) {
-      setExternalIdError("El ID de reserva externa es obligatorio cuando el canal no es 'Propio'")
-      return
-    }
-
     try {
       // Prepare guest data as JSONB
       const guestData = {
@@ -878,46 +840,15 @@ function BookingDialog({
       }
 
       // Calculate nights
-      const nights = nightsCalculation.nights
+      const nights = calculateNights()
 
       // Get property_channel ID from channel name and property
-      let property_channel_id = null
-      console.log("🔍 Looking for property_channel_id for:", {
-        property_id: formData.property_id,
-        booking_source: formData.booking_source
-      })
-      
-      if (formData.booking_source !== "Direct") {
-        try {
-          // First, get all property channels for this property
-          const { data: allChannels, error: channelsError } = await supabase
-            .from("property_channels")
-            .select("id, distribution_channels(name)")
-            .eq("property_id", formData.property_id)
-          
-          if (channelsError) {
-            console.error("❌ Error fetching property_channels:", channelsError)
-            property_channel_id = null
-          } else {
-            // Find the channel that matches the booking_source
-            const matchingChannel = allChannels?.find(channel => 
-              (channel.distribution_channels as any)?.name === formData.booking_source
-            )
-            
-            if (matchingChannel) {
-              property_channel_id = matchingChannel.id
-              console.log("✅ Found matching property_channel_id:", property_channel_id)
-            } else {
-              console.error("❌ No matching channel found for:", formData.booking_source)
-              console.log("📋 Available channels:", allChannels?.map(c => (c.distribution_channels as any)?.name))
-              property_channel_id = null
-            }
-          }
-        } catch (error) {
-          console.error("❌ Exception in property_channel query:", error)
-          property_channel_id = null
-        }
-      }
+      const { data: channelData } = await supabase
+        .from("property_channels")
+        .select("id")
+        .eq("property_id", formData.property_id)
+        .eq("distribution_channels.name", formData.booking_source)
+        .single()
 
       const submitData = {
         property_id: formData.property_id,
@@ -934,20 +865,13 @@ function BookingDialog({
         base_amount: formData.base_amount,
         cleaning_fee: formData.cleaning_fee,
         taxes: formData.taxes,
-        property_channel_id: property_channel_id,
+        property_channel_id: channelData?.id || null,
         notes: formData.notes,
         special_requests: formData.special_requests,
         channel_commission: formData.channel_commission,
         collection_commission: formData.collection_commission,
         external_source: formData.booking_source,
         external_id: formData.external_id || null
-      }
-
-      // Ensure we have a valid property_channel_id
-      if (!property_channel_id && formData.booking_source !== "Direct") {
-        console.error("❌ No valid property_channel_id found for booking_source:", formData.booking_source)
-        alert("Error: No se pudo encontrar el canal de distribución. Por favor, verifica la configuración del canal.")
-        return
       }
 
       console.log("📤 Submitting reservation data:", submitData)
@@ -960,12 +884,6 @@ function BookingDialog({
         
         if (error) {
           console.error("❌ Error updating reservation:", error)
-          console.error("📊 Error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          })
           throw error
         }
         console.log("✅ Reservation updated successfully")
@@ -976,12 +894,6 @@ function BookingDialog({
         
         if (error) {
           console.error("❌ Error creating reservation:", error)
-          console.error("📊 Error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          })
           throw error
         }
         console.log("✅ Reservation created successfully")
@@ -1000,132 +912,8 @@ function BookingDialog({
     if (!formData.check_in || !formData.check_out) return 0
     const start = new Date(formData.check_in)
     const end = new Date(formData.check_out)
-    
-    // Validar que check-out sea posterior a check-in
-    if (end <= start) {
-      return 0
-    }
-    
-    const diffTime = end.getTime() - start.getTime()
+    const diffTime = Math.abs(end.getTime() - start.getTime())
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  }
-
-  // Calcular noches y validar fechas usando useMemo
-  const nightsCalculation = useMemo(() => {
-    if (!formData.check_in || !formData.check_out) return { nights: 0, error: "" }
-    
-    const start = new Date(formData.check_in)
-    const end = new Date(formData.check_out)
-    
-    // Validar que check-out sea posterior a check-in
-    if (end <= start) {
-      return { 
-        nights: 0, 
-        error: "La fecha de check-out debe ser posterior a la fecha de check-in" 
-      }
-    }
-    
-    const diffTime = end.getTime() - start.getTime()
-    const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
-    return { nights, error: "" }
-  }, [formData.check_in, formData.check_out])
-
-  // Actualizar error de fechas cuando cambie el cálculo
-  useEffect(() => {
-    setDateError(nightsCalculation.error)
-  }, [nightsCalculation.error])
-
-  // Limpiar error del ID externo cuando cambie el canal a "Propio"
-  useEffect(() => {
-    if (formData.booking_source === "Direct" && externalIdError) {
-      setExternalIdError("")
-    }
-  }, [formData.booking_source, externalIdError])
-
-  // Cargar porcentajes de comisión cuando cambie el canal
-  // Solo para nuevas reservas, no para edición
-  useEffect(() => {
-    if (formData.property_id && formData.booking_source && formData.booking_source !== "Direct" && !booking) {
-      loadCommissionPercentages()
-    } else if (formData.booking_source === "Direct" || booking) {
-      setCommissionPercentages({ sale: null, charge: null })
-    }
-  }, [formData.property_id, formData.booking_source, booking])
-
-  const loadCommissionPercentages = async () => {
-    try {
-      console.log("🔍 Loading commission percentages for:", {
-        property_id: formData.property_id,
-        booking_source: formData.booking_source
-      })
-
-      // Primero, obtener todos los property_channels para esta propiedad
-      const { data: allChannels, error: channelsError } = await supabase
-        .from("property_channels")
-        .select(`
-          id,
-          commission_override_sale,
-          commission_override_charge,
-          distribution_channels(name)
-        `)
-        .eq("property_id", formData.property_id)
-
-      if (channelsError) {
-        console.error("❌ Error fetching property_channels:", channelsError)
-        setCommissionPercentages({ sale: null, charge: null })
-        return
-      }
-
-      console.log("📋 All channels for property:", allChannels)
-
-      // Buscar el canal que coincida con el booking_source
-      const matchingChannel = allChannels?.find(channel => 
-        (channel.distribution_channels as any)?.name === formData.booking_source
-      )
-
-      console.log("🎯 Matching channel:", matchingChannel)
-
-      if (matchingChannel) {
-        setCommissionPercentages({
-          sale: matchingChannel.commission_override_sale,
-          charge: matchingChannel.commission_override_charge
-        })
-        
-        // Calcular y aplicar las comisiones automáticamente
-        const baseAmount = formData.base_amount || 0
-        const saleCommission = matchingChannel.commission_override_sale ? 
-          Math.round((baseAmount * matchingChannel.commission_override_sale / 100) * 100) / 100 : 0
-        const chargeCommission = matchingChannel.commission_override_charge ? 
-          Math.round((baseAmount * matchingChannel.commission_override_charge / 100) * 100) / 100 : 0
-
-        console.log("💰 Calculated commissions:", {
-          baseAmount,
-          saleCommission,
-          chargeCommission,
-          salePercentage: matchingChannel.commission_override_sale,
-          chargePercentage: matchingChannel.commission_override_charge
-        })
-
-        setFormData(prev => {
-          console.log("🔄 Updating formData with commissions:", {
-            previous: { channel_commission: prev.channel_commission, collection_commission: prev.collection_commission },
-            new: { channel_commission: saleCommission, collection_commission: chargeCommission }
-          })
-          return {
-            ...prev,
-            channel_commission: saleCommission,
-            collection_commission: chargeCommission
-          }
-        })
-      } else {
-        console.log("❌ No matching channel found for:", formData.booking_source)
-        setCommissionPercentages({ sale: null, charge: null })
-      }
-    } catch (error) {
-      console.error("❌ Error in loadCommissionPercentages:", error)
-      setCommissionPercentages({ sale: null, charge: null })
-    }
   }
 
   const calculateTotalAmount = () => {
@@ -1181,435 +969,367 @@ function BookingDialog({
         <DialogDescription>{booking ? "Modifica los datos de la reserva" : "Crea una nueva reserva"}</DialogDescription>
       </DialogHeader>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        
-        {/* Primera fila: Información del Huésped + Detalles de la Reserva */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Sección Izquierda: Información del Huésped */}
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Información del Huésped</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
-                <Input
-                  id="guest_name"
-                  value={formData.guest_name}
-                  onChange={(e) => setFormData({ ...formData, guest_name: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
-                  required
-                  className="h-10"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="guest_email" className="text-sm font-medium text-gray-700">Email</Label>
-                <Input
-                  id="guest_email"
-                  type="email"
-                  value={formData.guest_email}
-                  onChange={(e) => setFormData({ ...formData, guest_email: e.target.value })}
-                  placeholder="Ej: juan.perez@example.com"
-                  className="h-10"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="guest_phone" className="text-sm font-medium text-gray-700">Teléfono *</Label>
-                <Input
-                  id="guest_phone"
-                  value={formData.guest_phone}
-                  onChange={(e) => setFormData({ ...formData, guest_phone: e.target.value })}
-                  placeholder="Ej: +34 600 123 456"
-                  required
-                  className="h-10"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="guest_country" className="text-sm font-medium text-gray-700">País</Label>
-                <Input
-                  id="guest_country"
-                  value={formData.guest_country}
-                  onChange={(e) => setFormData({ ...formData, guest_country: e.target.value })}
-                  placeholder="Ej: España"
-                  className="h-10"
-                />
-              </div>
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Property and Guest Selection */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="property_id">Propiedad *</Label>
+            <Select
+              value={formData.property_id}
+              onValueChange={(value) => setFormData({ ...formData, property_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una propiedad" />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>
+                    {property.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          
-          {/* Sección Derecha: Detalles de la Reserva */}
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Detalles de la Reserva</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="property_id" className="text-sm font-medium text-gray-700">Propiedad *</Label>
-                <Select
-                  value={formData.property_id}
-                  onValueChange={(value) => setFormData({ ...formData, property_id: value })}
-                >
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Selecciona una propiedad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="check_in" className="text-sm font-medium text-gray-700">Check-in *</Label>
-                  <Input
-                    id="check_in"
-                    type="date"
-                    value={formData.check_in}
-                    onChange={(e) => {
-                      setFormData({ ...formData, check_in: e.target.value })
-                      // Limpiar error cuando se cambia la fecha
-                      if (dateError) setDateError("")
-                    }}
-                    required
-                    className={`h-10 ${dateError ? 'border-red-500' : ''}`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="check_out" className="text-sm font-medium text-gray-700">Check-out *</Label>
-                  <Input
-                    id="check_out"
-                    type="date"
-                    value={formData.check_out}
-                    min={formData.check_in || undefined}
-                    onChange={(e) => {
-                      setFormData({ ...formData, check_out: e.target.value })
-                      // Limpiar error cuando se cambia la fecha
-                      if (dateError) setDateError("")
-                    }}
-                    required
-                    className={`h-10 ${dateError ? 'border-red-500' : ''}`}
-                  />
-                </div>
-              </div>
-              
-              {/* Mostrar error de validación de fechas */}
-              {dateError && (
-                <div className="text-red-500 text-sm mt-2">
-                  {dateError}
-                </div>
-              )}
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">Número de noches</Label>
-                <div className="h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center">
-                  <span className="text-gray-600 text-sm">
-                    {formData.check_in && formData.check_out ? `${nightsCalculation.nights} noches` : "Se calculará automáticamente"}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="guests_count" className="text-sm font-medium text-gray-700">Total huéspedes</Label>
-                  <Input
-                    id="guests_count"
-                    type="number"
-                    min="1"
-                    value={formData.guests_count}
-                    onChange={(e) => {
-                      const total = Number.parseInt(e.target.value)
-                      setFormData({ 
-                        ...formData, 
-                        guests_count: total,
-                        adults: Math.min(formData.adults, total),
-                        children: Math.max(0, total - formData.adults)
-                      })
-                    }}
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="adults" className="text-sm font-medium text-gray-700">Adultos</Label>
-                  <Input
-                    id="adults"
-                    type="number"
-                    min="1"
-                    max={formData.guests_count}
-                    value={formData.adults}
-                    onChange={(e) => {
-                      const adults = Number.parseInt(e.target.value)
-                      const children = Math.max(0, formData.guests_count - adults)
-                      setFormData({ 
-                        ...formData, 
-                        adults: adults,
-                        children: children
-                      })
-                    }}
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="children" className="text-sm font-medium text-gray-700">Niños</Label>
-                  <Input
-                    id="children"
-                    type="number"
-                    min="0"
-                    max={formData.guests_count - 1}
-                    value={formData.children}
-                    onChange={(e) => {
-                      const children = Number.parseInt(e.target.value)
-                      const adults = Math.max(1, formData.guests_count - children)
-                      setFormData({ 
-                        ...formData, 
-                        children: children,
-                        adults: adults
-                      })
-                    }}
-                    className="h-10"
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="guest_name">Nombre del Huésped *</Label>
+            <Input
+              id="guest_name"
+              value={formData.guest_name}
+              onChange={(e) => setFormData({ ...formData, guest_name: e.target.value })}
+              placeholder="Ej: Juan Pérez"
+              required
+            />
           </div>
         </div>
-        
-        {/* Segunda fila: Estado y Canal + Precios y Comisiones */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Sección Izquierda: Estado y Canal */}
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Estado y Canal</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="status" className="text-sm font-medium text-gray-700">Estado</Label>
-                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="confirmed">Confirmada</SelectItem>
-                    <SelectItem value="cancelled">Cancelada</SelectItem>
-                    <SelectItem value="completed">Completada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="payment_status" className="text-sm font-medium text-gray-700">Estado de pago</Label>
-                <Select value={formData.payment_status || "pending"} onValueChange={(value) => setFormData({ ...formData, payment_status: value })}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
-                    <SelectItem value="partial">Pago Parcial</SelectItem>
-                    <SelectItem value="refunded">Reembolsado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="booking_source" className="text-sm font-medium text-gray-700">Canal</Label>
-                <Select
-                  value={formData.booking_source}
-                  onValueChange={(value) => setFormData({ ...formData, booking_source: value })}
-                >
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Selecciona un canal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Direct">Propio</SelectItem>
-                    {availableChannels
-                      .filter((channel) => {
-                        const channelName = channel.channel?.name || '';
-                        // Filtrar canales que podrían causar duplicación con "Propio"
-                        return channelName !== 'Propio' && 
-                               channelName !== 'Direct' && 
-                               channelName !== 'Canal Directo' &&
-                               channelName !== 'Directo';
-                      })
-                      .map((channel) => (
-                        <SelectItem key={channel.id} value={channel.channel?.name || ''}>
-                          {channel.channel?.name || ''}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="external_id" className="text-sm font-medium text-gray-700">
-                  ID de reserva externa {formData.booking_source !== "Direct" ? "*" : ""}
-                </Label>
-                <Input
-                  id="external_id"
-                  value={formData.external_id || ""}
-                  onChange={(e) => {
-                    setFormData({ ...formData, external_id: e.target.value })
-                    // Limpiar error cuando se cambia el valor
-                    if (externalIdError) setExternalIdError("")
-                  }}
-                  placeholder="Ej: AIR-123456"
-                  className={`h-10 ${externalIdError ? 'border-red-500' : ''}`}
-                  required={formData.booking_source !== "Direct"}
-                />
-                <div className="text-xs text-gray-500">
-                  ID de la reserva en el canal de distribución externo
-                  {formData.booking_source !== "Direct" && (
-                    <span className="text-red-500 ml-1">(Obligatorio para canales externos)</span>
-                  )}
-                </div>
-                {/* Mostrar error de validación del ID externo */}
-                {externalIdError && (
-                  <div className="text-red-500 text-sm mt-1">
-                    {externalIdError}
-                  </div>
-                )}
-              </div>
-            </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="guest_email">Email del Huésped</Label>
+            <Input
+              id="guest_email"
+              type="email"
+              value={formData.guest_email}
+              onChange={(e) => setFormData({ ...formData, guest_email: e.target.value })}
+              placeholder="Ej: juan.perez@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="guest_phone">Teléfono del Huésped</Label>
+            <Input
+              id="guest_phone"
+              value={formData.guest_phone}
+              onChange={(e) => setFormData({ ...formData, guest_phone: e.target.value })}
+              placeholder="Ej: +34 600 123 456"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="guest_country">País del Huésped</Label>
+            <Input
+              id="guest_country"
+              value={formData.guest_country}
+              onChange={(e) => setFormData({ ...formData, guest_country: e.target.value })}
+              placeholder="Ej: España"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="guest_document_type">Tipo de Documento</Label>
+            <Select
+              value={formData.guest_document_type}
+              onValueChange={(value) => setFormData({ ...formData, guest_document_type: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DNI">DNI</SelectItem>
+                <SelectItem value="NIE">NIE</SelectItem>
+                <SelectItem value="Passport">Pasaporte</SelectItem>
+                <SelectItem value="Other">Otro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="guest_document_number">Número de Documento</Label>
+            <Input
+              id="guest_document_number"
+              value={formData.guest_document_number}
+              onChange={(e) => setFormData({ ...formData, guest_document_number: e.target.value })}
+              placeholder="Ej: 12345678Z"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="guests_count">Total Huéspedes</Label>
+            <Input
+              id="guests_count"
+              type="number"
+              min="1"
+              value={formData.guests_count}
+              onChange={(e) => {
+                const total = Number.parseInt(e.target.value)
+                setFormData({ 
+                  ...formData, 
+                  guests_count: total,
+                  adults: Math.min(formData.adults, total),
+                  children: Math.max(0, total - formData.adults)
+                })
+              }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adults">Adultos</Label>
+            <Input
+              id="adults"
+              type="number"
+              min="1"
+              max={formData.guests_count}
+              value={formData.adults}
+              onChange={(e) => {
+                const adults = Number.parseInt(e.target.value)
+                const children = Math.max(0, formData.guests_count - adults)
+                setFormData({ 
+                  ...formData, 
+                  adults: adults,
+                  children: children
+                })
+              }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="children">Niños</Label>
+            <Input
+              id="children"
+              type="number"
+              min="0"
+              max={formData.guests_count - 1}
+              value={formData.children}
+              onChange={(e) => {
+                const children = Number.parseInt(e.target.value)
+                const adults = Math.max(1, formData.guests_count - children)
+                setFormData({ 
+                  ...formData, 
+                  children: children,
+                  adults: adults
+                })
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Dates and Check-in/out */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="check_in">Check-in *</Label>
+            <Input
+              id="check_in"
+              type="date"
+              value={formData.check_in}
+              onChange={(e) => setFormData({ ...formData, check_in: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="check_out">Check-out *</Label>
+            <Input
+              id="check_out"
+              type="date"
+              value={formData.check_out}
+              onChange={(e) => setFormData({ ...formData, check_out: e.target.value })}
+              required
+            />
+          </div>
+        </div>
+
+        {/* Nights calculation display */}
+        {formData.check_in && formData.check_out && (
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <span className="font-medium">Duración:</span> {calculateNights()} noches
+            </p>
+          </div>
+        )}
+
+        {/* Channel and Status */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="booking_source">Canal de reserva *</Label>
+            <Select
+              value={formData.booking_source}
+              onValueChange={(value) => setFormData({ ...formData, booking_source: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un canal" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableChannels.map((channel) => (
+                  <SelectItem key={channel.id} value={channel.name}>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                      <span>{channel.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Estado</Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="confirmed">Confirmada</SelectItem>
+                <SelectItem value="cancelled">Cancelada</SelectItem>
+                <SelectItem value="completed">Completada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* External ID for non-direct channels */}
+        {formData.booking_source !== "Direct" && (
+          <div className="space-y-2">
+            <Label htmlFor="external_id">ID de Reserva Externa *</Label>
+            <Input
+              id="external_id"
+              type="text"
+              placeholder="Ej: 4689133542"
+              value={formData.external_id}
+              onChange={(e) => setFormData({ ...formData, external_id: e.target.value })}
+              required
+            />
+            <p className="text-sm text-gray-500">
+              ID de la reserva en el canal de distribución externo
+            </p>
+          </div>
+        )}
+
+        {/* Financial Information */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-lg font-medium">Información Financiera</h3>
+            {calculatingCommissions && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            )}
           </div>
           
-                          {/* Sección Derecha: Precios y Comisiones */}
-                <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Precios y Comisiones</h3>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="base_amount" className="text-sm font-medium text-gray-700">Precio base</Label>
-                        <Input
-                          id="base_amount"
-                          type="number"
-                          step="0.01"
-                          value={formData.base_amount || ""}
-                          onChange={(e) => setFormData({ ...formData, base_amount: parseFloat(e.target.value) || 0 })}
-                          placeholder="0.00"
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cleaning_fee" className="text-sm font-medium text-gray-700">Tarifa de limpieza</Label>
-                        <Input
-                          id="cleaning_fee"
-                          type="number"
-                          step="0.01"
-                          value={formData.cleaning_fee || ""}
-                          onChange={(e) => setFormData({ ...formData, cleaning_fee: parseFloat(e.target.value) || 0 })}
-                          placeholder="0.00"
-                          className="h-10"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="taxes" className="text-sm font-medium text-gray-700">Impuestos</Label>
-                      <Input
-                        id="taxes"
-                        type="number"
-                        step="0.01"
-                        value={formData.taxes || ""}
-                        onChange={(e) => setFormData({ ...formData, taxes: parseFloat(e.target.value) || 0 })}
-                        placeholder="0.00"
-                        className="h-10"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="channel_commission" className="text-sm font-medium text-gray-700">
-                        Comisión Canal
-                        {commissionPercentages.sale !== null && (
-                          <span className="text-blue-600 ml-1">({commissionPercentages.sale}%)</span>
-                        )}
-                      </Label>
-                      <Input
-                        id="channel_commission"
-                        type="number"
-                        step="0.01"
-                        value={formData.channel_commission || ""}
-                        onChange={(e) => setFormData({ ...formData, channel_commission: parseFloat(e.target.value) || 0 })}
-                        placeholder="0.00"
-                        className={`h-10 ${commissionPercentages.sale !== null ? 'bg-blue-50 border-blue-200' : ''}`}
-                        onFocus={() => console.log("🔍 Channel commission field value:", formData.channel_commission)}
-                      />
-                      {commissionPercentages.sale !== null && (
-                        <div className="text-xs text-blue-600">
-                          Calculado automáticamente: {formData.base_amount || 0} × {commissionPercentages.sale}% = €{Math.round(((formData.base_amount || 0) * commissionPercentages.sale / 100) * 100) / 100}
-                          <span className="text-gray-500 ml-2">(Puedes modificar si es necesario)</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="collection_commission" className="text-sm font-medium text-gray-700">
-                        Comisión Cobro
-                        {commissionPercentages.charge !== null && (
-                          <span className="text-blue-600 ml-1">({commissionPercentages.charge}%)</span>
-                        )}
-                      </Label>
-                      <Input
-                        id="collection_commission"
-                        type="number"
-                        step="0.01"
-                        value={formData.collection_commission || ""}
-                        onChange={(e) => setFormData({ ...formData, collection_commission: parseFloat(e.target.value) || 0 })}
-                        placeholder="0.00"
-                        className={`h-10 ${commissionPercentages.charge !== null ? 'bg-blue-50 border-blue-200' : ''}`}
-                        onFocus={() => console.log("🔍 Collection commission field value:", formData.collection_commission)}
-                      />
-                      {commissionPercentages.charge !== null && (
-                        <div className="text-xs text-blue-600">
-                          Calculado automáticamente: {formData.base_amount || 0} × {commissionPercentages.charge}% = €{Math.round(((formData.base_amount || 0) * commissionPercentages.charge / 100) * 100) / 100}
-                          <span className="text-gray-500 ml-2">(Puedes modificar si es necesario)</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Total (sin comisiones)</Label>
-                      <div className="text-2xl font-bold text-gray-900">
-                        €{((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-        </div>
-        
-        {/* Tercera fila: Notas y Solicitudes */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Notas y Solicitudes</h3>
-          <div className="space-y-4">
+          {/* Base Amount, Taxes, Cleaning Fee */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm font-medium text-gray-700">Notas</Label>
-              <textarea
-                id="notes"
-                value={formData.notes || ""}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Anotaciones sobre la reserva..."
-                className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              <Label htmlFor="base_amount">Importe Neto (€) *</Label>
+              <Input
+                id="base_amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.base_amount}
+                onChange={(e) => setFormData({ ...formData, base_amount: Number.parseFloat(e.target.value) || 0 })}
+                className="text-lg font-semibold"
               />
             </div>
-            
             <div className="space-y-2">
-              <Label htmlFor="special_requests" className="text-sm font-medium text-gray-700">Solicitudes especiales</Label>
-              <textarea
-                id="special_requests"
-                value={formData.special_requests || ""}
-                onChange={(e) => setFormData({ ...formData, special_requests: e.target.value })}
-                placeholder="Solicitudes especiales del huésped..."
-                className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              <Label htmlFor="taxes">Impuestos (€)</Label>
+              <Input
+                id="taxes"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.taxes}
+                onChange={(e) => setFormData({ ...formData, taxes: Number.parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cleaning_fee">Limpieza (€)</Label>
+              <Input
+                id="cleaning_fee"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.cleaning_fee}
+                onChange={(e) => setFormData({ ...formData, cleaning_fee: Number.parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          {/* Total Amount (Read-only) */}
+          <div className="space-y-2">
+            <Label className="text-blue-600">Total (€)</Label>
+            <div className="h-10 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md flex items-center">
+              <span className="text-lg font-semibold text-blue-600">
+                €{formData.total_amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+              </span>
+            </div>
+          </div>
+
+          {/* Payment Status (Read-only) */}
+          <div className="space-y-2">
+            <Label className="text-gray-600">Estado del Pago</Label>
+            <div className="h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center">
+              <span className="font-medium text-gray-700 capitalize">
+                {formData.payment_status}
+              </span>
+            </div>
+          </div>
+
+          {/* Commission breakdown */}
+          <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div className="space-y-2">
+              <Label className="text-orange-600">Comisión Venta (€)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.channel_commission}
+                onChange={(e) => setFormData({ ...formData, channel_commission: Number.parseFloat(e.target.value) || 0 })}
+                className="bg-orange-50 border-orange-200"
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-red-600">Comisión Cobro (€)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.collection_commission}
+                onChange={(e) => setFormData({ ...formData, collection_commission: Number.parseFloat(e.target.value) || 0 })}
+                className="bg-red-50 border-red-200"
+                placeholder="0.00"
               />
             </div>
           </div>
         </div>
 
+        {/* Special Requests */}
+        <div className="space-y-2">
+          <Label htmlFor="special_requests">Solicitudes especiales</Label>
+          <Input
+            id="special_requests"
+            value={formData.special_requests}
+            onChange={(e) => setFormData({ ...formData, special_requests: e.target.value })}
+            placeholder="Solicitudes del huésped..."
+          />
+        </div>
 
-
-
+        {/* Notes */}
+        <div className="space-y-2">
+          <Label htmlFor="notes">Anotaciones</Label>
+          <textarea
+            id="notes"
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Anotaciones sobre la reserva..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            rows={3}
+          />
+        </div>
 
         <div className="flex justify-end space-x-2 pt-4 border-t">
           <Button type="button" variant="outline" onClick={onClose}>

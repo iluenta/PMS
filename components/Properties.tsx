@@ -125,9 +125,9 @@ export default function Properties() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleAdd}>
+            <Button onClick={handleAdd} className="mr-2">
               <Plus className="h-4 w-4 mr-2" />
-              Nueva Propiedad
+              Añadir
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
