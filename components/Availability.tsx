@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase, isDemoMode, mockData, type Property, type Booking, type AvailabilitySetting } from "@/lib/supabase"
+import { supabase, type Property, type Reservation } from "@/lib/supabase"
 import {
   CalendarIcon,
   ChevronLeft,
@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Search,
   Filter,
+  Building,
 } from "lucide-react"
 
 interface AvailabilitySlot {
@@ -28,17 +29,33 @@ interface AvailabilitySlot {
   reason?: string
 }
 
+interface PropertyAvailabilitySettings {
+  minStay: number
+  maxStay: number
+  checkInTime: string
+  checkOutTime: string
+}
+
 export default function Availability() {
   const [properties, setProperties] = useState<Property[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySetting[]>([])
+  const [reservations, setReservations] = useState<Reservation[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>("")
   const [checkInDate, setCheckInDate] = useState("")
   const [checkOutDate, setCheckOutDate] = useState("")
   const [nights, setNights] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([])
+  const [quickCheckResult, setQuickCheckResult] = useState<{
+    isAvailable: boolean
+    reason?: string
+    nights: number
+    conflicts?: Array<{
+      startDate: Date
+      endDate: Date
+      guestName: string
+    }>
+    settings: PropertyAvailabilitySettings
+  } | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -48,7 +65,7 @@ export default function Availability() {
     if (selectedProperty) {
       calculateAvailability()
     }
-  }, [selectedProperty, currentDate, bookings, availabilitySettings])
+  }, [selectedProperty, reservations])
 
   useEffect(() => {
     if (checkInDate && checkOutDate) {
@@ -62,21 +79,15 @@ export default function Availability() {
 
   const fetchData = async () => {
     try {
-      if (isDemoMode) {
-        setProperties(mockData.properties.filter((p) => p.status === "active"))
-        setBookings(mockData.bookings.filter((b) => b.status === "confirmed"))
-        setAvailabilitySettings(mockData.availabilitySettings)
-        if (mockData.properties.length > 0) {
-          setSelectedProperty(mockData.properties[0].id)
-        }
-        return
-      }
+      const { data: propertiesData } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("status", "active")
 
-      const { data: propertiesData } = await supabase.from("properties").select("*").eq("status", "active")
-
-      const { data: bookingsData } = await supabase.from("bookings").select("*").eq("status", "confirmed")
-
-      const { data: availabilityData } = await supabase.from("availability_settings").select("*").eq("is_active", true)
+      const { data: reservationsData } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("status", "confirmed")
 
       if (propertiesData) {
         setProperties(propertiesData)
@@ -84,8 +95,7 @@ export default function Availability() {
           setSelectedProperty(propertiesData[0].id)
         }
       }
-      if (bookingsData) setBookings(bookingsData)
-      if (availabilityData) setAvailabilitySettings(availabilityData)
+      if (reservationsData) setReservations(reservationsData)
     } catch (error) {
       console.error("Error fetching data:", error)
     } finally {
@@ -93,155 +103,254 @@ export default function Availability() {
     }
   }
 
+  const getPropertySettings = (propertyId: string): PropertyAvailabilitySettings => {
+    const property = properties.find((p) => p.id === propertyId)
+    return {
+      minStay: property?.min_stay || 1,
+      maxStay: property?.max_stay || 30,
+      checkInTime: property?.check_in_time || "15:00:00",
+      checkOutTime: property?.check_out_time || "11:00:00"
+    }
+  }
+
   const calculateAvailability = () => {
     if (!selectedProperty) return
 
     const property = properties.find((p) => p.id === selectedProperty)
-    const settings = availabilitySettings.find((s) => s.property_id === selectedProperty)
-    const propertyBookings = bookings.filter((b) => b.property_id === selectedProperty)
+    const settings = getPropertySettings(selectedProperty)
+    const propertyReservations = reservations.filter((r) => r.property_id === selectedProperty)
 
-    if (!property || !settings) return
+    if (!property) return
 
     const slots: AvailabilitySlot[] = []
     const today = new Date()
-    const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-    const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+    const currentYear = today.getFullYear()
+    const startDate = new Date(currentYear, 0, 1) // 1 de enero del año actual
+    const endDate = new Date(currentYear, 11, 31) // 31 de diciembre del año actual
 
-    // Generate all possible date ranges for the month
-    for (let day = 1; day <= endDate.getDate(); day++) {
-      const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+    // Ordenar reservas por fecha de check-in
+    const sortedReservations = propertyReservations
+      .map(r => ({
+        start: new Date(r.check_in),
+        end: new Date(r.check_out),
+        guest: r.guest?.name || "Sin nombre"
+      }))
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
 
-      // Skip past dates
-      if (currentDay < today) continue
-
-      // Check advance booking restriction
-      const daysDifference = Math.ceil((currentDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      if (daysDifference < settings.advance_booking_days) continue
-
-      // Check if it's a valid check-in day
-      const dayName = currentDay.toLocaleDateString("en-US", { weekday: "lowercase" })
-      if (!settings.check_in_days.includes(dayName)) continue
-
-      // Try different stay lengths
-      for (let stayLength = settings.min_nights; stayLength <= Math.min(settings.max_nights, 14); stayLength++) {
-        const checkOut = new Date(currentDay)
-        checkOut.setDate(checkOut.getDate() + stayLength)
-
-        // Check if checkout day is valid
-        const checkOutDayName = checkOut.toLocaleDateString("en-US", { weekday: "lowercase" })
-        if (!settings.check_out_days.includes(checkOutDayName)) continue
-
-        // Check for conflicts with existing bookings
-        const hasConflict = propertyBookings.some((booking) => {
-          const bookingStart = new Date(booking.check_in)
-          const bookingEnd = new Date(booking.check_out)
-          return currentDay < bookingEnd && checkOut > bookingStart
-        })
-
-        slots.push({
-          startDate: new Date(currentDay),
-          endDate: new Date(checkOut),
-          nights: stayLength,
-          isAvailable: !hasConflict,
-          reason: hasConflict ? "Ocupado" : undefined,
-        })
-      }
+    // Función para verificar si una fecha está disponible
+    const isDateAvailable = (date: Date): boolean => {
+      if (date < today) return false
+      
+      return !sortedReservations.some(reservation => {
+        const reservationStart = new Date(reservation.start)
+        const reservationEnd = new Date(reservation.end)
+        return date >= reservationStart && date < reservationEnd
+      })
     }
 
-    // Sort by start date and filter duplicates
-    const uniqueSlots = slots
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-      .filter(
-        (slot, index, arr) =>
-          index === 0 ||
-          slot.startDate.getTime() !== arr[index - 1].startDate.getTime() ||
-          slot.nights !== arr[index - 1].nights,
-      )
+    // Función para agrupar fechas consecutivas
+    const groupConsecutiveDates = (): Array<{start: Date, end: Date}> => {
+      const availableDates: Date[] = []
+      
+      // Generar todas las fechas del año
+      const currentDate = new Date(startDate)
+      while (currentDate <= endDate) {
+        if (isDateAvailable(currentDate)) {
+          availableDates.push(new Date(currentDate))
+        }
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
 
-    setAvailabilitySlots(uniqueSlots.slice(0, 20)) // Limit to 20 results
+      console.log("🔍 Debug - Fechas disponibles encontradas:", availableDates.length)
+      console.log("🔍 Debug - Primera fecha disponible:", availableDates[0])
+      console.log("🔍 Debug - Última fecha disponible:", availableDates[availableDates.length - 1])
+
+      // Debug específico para el periodo problemático
+      const problematicDates = availableDates.filter(date => {
+        const day = date.getDate()
+        const month = date.getMonth()
+        return month === 9 && day >= 23 && day <= 31 // Octubre 23-31
+      })
+      console.log("🔍 Debug - Fechas disponibles del 23-31 octubre:", problematicDates.map(d => d.toDateString()))
+
+      if (availableDates.length === 0) return []
+
+      // Agrupar fechas consecutivas usando un enfoque más simple
+      const groups: Array<{start: Date, end: Date}> = []
+      let currentGroup = {
+        start: new Date(availableDates[0]),
+        end: new Date(availableDates[0])
+      }
+
+      for (let i = 1; i < availableDates.length; i++) {
+        const currentDate = availableDates[i]
+        const previousDate = availableDates[i - 1]
+        
+        // Calcular diferencia en días usando fechas normalizadas
+        const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+        const previousDay = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate())
+        
+        const diffTime = currentDay.getTime() - previousDay.getTime()
+        const diffDays = diffTime / (1000 * 60 * 60 * 24)
+        
+        console.log(`🔍 Debug - Comparando: ${previousDate.toDateString()} vs ${currentDate.toDateString()}, diferencia: ${diffDays} días`)
+        
+        // Si la diferencia es aproximadamente 1 día (con tolerancia para cambio de horario)
+        if (Math.abs(diffDays - 1) < 0.1) {
+          currentGroup.end = new Date(currentDate)
+          console.log(`🔍 Debug - Extendiendo grupo hasta: ${currentDate.toDateString()}`)
+        } else {
+          // Finalizar grupo actual y comenzar uno nuevo
+          console.log(`🔍 Debug - Finalizando grupo: ${currentGroup.start.toDateString()} → ${currentGroup.end.toDateString()}`)
+          groups.push({...currentGroup})
+          currentGroup = {
+            start: new Date(currentDate),
+            end: new Date(currentDate)
+          }
+        }
+      }
+      
+      // Agregar el último grupo
+      groups.push(currentGroup)
+      
+      console.log("🔍 Debug - Grupos de fechas consecutivas:", groups.length)
+      console.log("🔍 Debug - Último grupo:", groups[groups.length - 1])
+      
+      return groups
+    }
+
+    // Obtener grupos de fechas consecutivas
+    const consecutiveGroups = groupConsecutiveDates()
+
+    // Filtrar solo grupos significativos (más de 3 días)
+    const significantGroups = consecutiveGroups.filter(group => {
+      const totalDays = Math.floor((group.end.getTime() - group.start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      return totalDays >= 3 // Solo grupos de 3 días o más
+    })
+
+    console.log("🔍 Debug - Grupos significativos (3+ días):", significantGroups.length)
+
+    // Generar slots basados en los grupos y parámetros de configuración
+    significantGroups.forEach(group => {
+      const startDate = group.start
+      const endDate = group.end
+      const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+      console.log(`🔍 Debug - Procesando grupo significativo: ${startDate.toDateString()} a ${endDate.toDateString()} (${totalDays} días)`)
+
+      // Solo generar un slot por grupo que cubra todo el rango disponible
+      // Verificar que el periodo completo esté disponible
+      let isPeriodAvailable = true
+      for (let day = 0; day < totalDays; day++) {
+        const testDate = new Date(startDate)
+        testDate.setDate(testDate.getDate() + day)
+        if (!isDateAvailable(testDate)) {
+          isPeriodAvailable = false
+          break
+        }
+      }
+      
+      if (isPeriodAvailable && totalDays >= settings.minStay) {
+        slots.push({
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          nights: totalDays,
+          isAvailable: true,
+          reason: "Disponible"
+        })
+      }
+    })
+
+    // Filtrar slots duplicados y ordenar
+    const uniqueSlots = slots
+      .filter((slot, index, arr) => 
+        index === arr.findIndex(s => 
+          s.startDate.getTime() === slot.startDate.getTime() && 
+          s.endDate.getTime() === slot.endDate.getTime()
+        )
+      )
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+      .slice(0, 100) // Aumentar límite para mostrar más periodos del año
+
+    console.log("🔍 Debug - Total slots encontrados:", slots.length)
+    console.log("🔍 Debug - Slots únicos:", uniqueSlots.length)
+    console.log("🔍 Debug - Último slot:", uniqueSlots[uniqueSlots.length - 1])
+    console.log("🔍 Debug - Reservas de la propiedad:", propertyReservations.length)
+
+    setAvailabilitySlots(uniqueSlots)
   }
 
   const checkSpecificAvailability = () => {
-    if (!selectedProperty || !checkInDate || !checkOutDate) return
-
-    const property = properties.find((p) => p.id === selectedProperty)
-    const settings = availabilitySettings.find((s) => s.property_id === selectedProperty)
-    const propertyBookings = bookings.filter((b) => b.property_id === selectedProperty)
-
-    if (!property || !settings) return
-
-    const start = new Date(checkInDate)
-    const end = new Date(checkOutDate)
-    const today = new Date()
-
-    // Check advance booking
-    const daysDifference = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysDifference < settings.advance_booking_days) {
-      alert(`Se requiere al menos ${settings.advance_booking_days} días de antelación`)
+    if (!selectedProperty || !checkInDate || !checkOutDate) {
+      setQuickCheckResult(null)
       return
     }
 
-    // Check minimum nights
-    if (nights < settings.min_nights) {
-      alert(`Estancia mínima: ${settings.min_nights} noches`)
+    const startDate = new Date(checkInDate)
+    const endDate = new Date(checkOutDate)
+    const settings = getPropertySettings(selectedProperty)
+    const propertyReservations = reservations.filter((r) => r.property_id === selectedProperty)
+
+    // Validate basic rules
+    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (nights < settings.minStay) {
+      setQuickCheckResult({
+        isAvailable: false,
+        reason: `Estancia mínima requerida: ${settings.minStay} noches`,
+        nights,
+        settings
+      })
       return
     }
 
-    // Check maximum nights
-    if (nights > settings.max_nights) {
-      alert(`Estancia máxima: ${settings.max_nights} noches`)
+    if (nights > settings.maxStay) {
+      setQuickCheckResult({
+        isAvailable: false,
+        reason: `Estancia máxima permitida: ${settings.maxStay} noches`,
+        nights,
+        settings
+      })
       return
     }
 
-    // Check valid check-in day
-    const checkInDayName = start.toLocaleDateString("en-US", { weekday: "lowercase" })
-    if (!settings.check_in_days.includes(checkInDayName)) {
-      alert(`Check-in no permitido en ${start.toLocaleDateString("es-ES", { weekday: "long" })}`)
-      return
-    }
-
-    // Check valid check-out day
-    const checkOutDayName = end.toLocaleDateString("en-US", { weekday: "lowercase" })
-    if (!settings.check_out_days.includes(checkOutDayName)) {
-      alert(`Check-out no permitido en ${end.toLocaleDateString("es-ES", { weekday: "long" })}`)
-      return
-    }
-
-    // Check for conflicts
-    const hasConflict = propertyBookings.some((booking) => {
-      const bookingStart = new Date(booking.check_in)
-      const bookingEnd = new Date(booking.check_out)
-      return start < bookingEnd && end > bookingStart
+    // Check for conflicts with existing reservations
+    const conflicts = propertyReservations.filter((reservation) => {
+      const reservationStart = new Date(reservation.check_in)
+      const reservationEnd = new Date(reservation.check_out)
+      return startDate < reservationEnd && endDate > reservationStart
     })
 
-    if (hasConflict) {
-      alert("❌ No disponible - Fechas ocupadas")
-    } else {
-      alert("✅ Disponible - Puedes confirmar la reserva")
+    if (conflicts.length > 0) {
+      setQuickCheckResult({
+        isAvailable: false,
+        reason: "Periodo ocupado",
+        nights,
+        conflicts: conflicts.map(c => ({
+          startDate: new Date(c.check_in),
+          endDate: new Date(c.check_out),
+          guestName: c.guest?.name || "Sin nombre"
+        })),
+        settings
+      })
+      return
     }
-  }
 
-  const navigateMonth = (direction: "prev" | "next") => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev)
-      if (direction === "prev") {
-        newDate.setMonth(prev.getMonth() - 1)
-      } else {
-        newDate.setMonth(prev.getMonth() + 1)
-      }
-      return newDate
+    setQuickCheckResult({
+      isAvailable: true,
+      reason: "Disponible",
+      nights,
+      settings
     })
   }
+
+
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "short",
     })
-  }
-
-  const getPropertySettings = (propertyId: string) => {
-    return availabilitySettings.find((s) => s.property_id === propertyId)
   }
 
   if (loading) {
@@ -262,40 +371,40 @@ export default function Availability() {
         <p className="mt-2 text-gray-600">Consulta rápidamente los huecos libres en tus propiedades</p>
       </div>
 
-      {/* Property Selection */}
+      {/* Property Selector */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Filter className="h-5 w-5 mr-2" />
+            <Building className="h-5 w-5 mr-2" />
             Seleccionar Propiedad
           </CardTitle>
+          <CardDescription>
+            Elige una propiedad para ver su disponibilidad específica
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="property">Propiedad</Label>
-              <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una propiedad" />
-                </SelectTrigger>
-                <SelectContent>
-                  {properties.map((property) => (
-                    <SelectItem key={property.id} value={property.id}>
-                      {property.name} - {property.city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedSettings && (
-              <div className="space-y-2">
-                <Label>Configuración</Label>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p>• Mín. noches: {selectedSettings.min_nights}</p>
-                  <p>• Máx. noches: {selectedSettings.max_nights}</p>
-                  <p>• Antelación: {selectedSettings.advance_booking_days} días</p>
-                </div>
+          <div className="space-y-2">
+            <Label htmlFor="property-select">Propiedad</Label>
+            <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+              <SelectTrigger className="w-full md:w-80">
+                <SelectValue placeholder="Selecciona una propiedad" />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>
+                    {property.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedPropertyData && (
+              <div className="text-sm text-gray-600 mt-2">
+                <strong>Propiedad seleccionada:</strong> {selectedPropertyData.name}
+                {selectedPropertyData.address && (
+                  <span className="block text-xs text-gray-500">
+                    {selectedPropertyData.address}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -364,16 +473,8 @@ export default function Availability() {
                   Huecos Disponibles - {selectedPropertyData?.name}
                 </CardTitle>
                 <CardDescription>
-                  {currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                  {new Date().getFullYear()} - Todos los periodos disponibles
                 </CardDescription>
-              </div>
-              <div className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </CardHeader>
@@ -445,49 +546,44 @@ export default function Availability() {
         </Card>
       )}
 
-      {/* Property Restrictions Summary */}
-      {selectedSettings && (
+      {/* Quick Check Result */}
+      {quickCheckResult && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
               <AlertTriangle className="h-5 w-5 mr-2" />
-              Restricciones de la Propiedad
+              Resultado de la Consulta Rápida
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium mb-3">Estancia</h4>
-                <div className="space-y-2 text-sm">
-                  <p>• Mínimo: {selectedSettings.min_nights} noches</p>
-                  <p>• Máximo: {selectedSettings.max_nights} noches</p>
-                  <p>• Antelación mínima: {selectedSettings.advance_booking_days} días</p>
-                  <p>• Antelación máxima: {selectedSettings.max_advance_booking_days} días</p>
+            <div className="flex items-center mb-3">
+              {quickCheckResult.isAvailable ? (
+                <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+              ) : (
+                <XCircle className="h-6 w-6 text-red-600 mr-2" />
+              )}
+              <span className={`font-medium ${quickCheckResult.isAvailable ? "text-green-800" : "text-red-800"}`}>
+                {quickCheckResult.reason}
+              </span>
                 </div>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p>Estancia: {quickCheckResult.nights} noche{quickCheckResult.nights > 1 ? "s" : ""}</p>
+              <p>Configuración: {quickCheckResult.settings.minStay} - {quickCheckResult.settings.maxStay} noches</p>
+              <p>Check-in: {quickCheckResult.settings.checkInTime}</p>
+              <p>Check-out: {quickCheckResult.settings.checkOutTime}</p>
               </div>
-
-              <div>
-                <h4 className="font-medium mb-3">Días Permitidos</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="font-medium">Check-in:</p>
-                    <p className="text-gray-600">
-                      {selectedSettings.check_in_days
-                        .map((day) => day.charAt(0).toUpperCase() + day.slice(1))
-                        .join(", ")}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Check-out:</p>
-                    <p className="text-gray-600">
-                      {selectedSettings.check_out_days
-                        .map((day) => day.charAt(0).toUpperCase() + day.slice(1))
-                        .join(", ")}
-                    </p>
-                  </div>
-                </div>
+            {quickCheckResult.conflicts && quickCheckResult.conflicts.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-medium mb-2">Conflictos:</h4>
+                <ul className="list-disc list-inside text-sm text-gray-600">
+                  {quickCheckResult.conflicts.map((conflict, index) => (
+                    <li key={index}>
+                      {formatDate(conflict.startDate)} - {formatDate(conflict.endDate)} (Invitado: {conflict.guestName})
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}

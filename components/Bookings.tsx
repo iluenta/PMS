@@ -190,7 +190,7 @@ export default function Bookings() {
           *,
           property_channels!reservations_property_channel_fkey(
             *,
-            distribution_channels(*)
+            channel:distribution_channels(*)
           )
         `)
         .order("created_at", { ascending: false })
@@ -210,11 +210,30 @@ export default function Bookings() {
             if (reservationsData) {
         // Transform reservations data to match our Booking interface
         const transformedReservations = reservationsData.map((reservation) => {
+          // Debug: Log the reservation data to understand the structure
+          console.log("🔍 Processing reservation:", {
+            id: reservation.id,
+            property_channels: reservation.property_channels,
+            channel: reservation.property_channels?.channel,
+            external_source: reservation.external_source,
+            external_id: reservation.external_id
+          })
+          
+          // Determine booking_source with better logic
+          let bookingSource = 'Direct' // Default
+          if (reservation.property_channels?.channel?.name) {
+            bookingSource = reservation.property_channels.channel.name
+          } else if (reservation.external_source) {
+            bookingSource = reservation.external_source
+          }
+          
+          console.log("🔍 Determined booking_source:", bookingSource)
+          
           return {
             ...reservation,
             guest_id: 'guest-jsonb', // Since guest is JSONB, we use a placeholder
             guests_count: reservation.guests || reservation.adults + reservation.children || 1,
-            booking_source: reservation.property_channels?.distribution_channels?.name || reservation.external_source || 'Direct',
+            booking_source: bookingSource,
             external_id: reservation.external_id || null,
             // Ensure commission fields are properly included
             channel_commission: reservation.channel_commission || 0,
@@ -736,6 +755,7 @@ function BookingDialog({
   const [calculatingCommissions, setCalculatingCommissions] = useState(false)
   const [dateError, setDateError] = useState<string>("")
   const [externalIdError, setExternalIdError] = useState<string>("")
+  const [propertyError, setPropertyError] = useState<string>("")
   const [commissionPercentages, setCommissionPercentages] = useState<{
     sale: number | null;
     charge: number | null;
@@ -770,6 +790,10 @@ function BookingDialog({
         channel_commission: booking.channel_commission || 0,
         collection_commission: booking.collection_commission || 0,
       }
+      console.log("🎯 Setting form data for editing:", {
+        booking_source: formDataToSet.booking_source,
+        booking: booking
+      })
       setFormData(formDataToSet)
     } else {
       setFormData({
@@ -817,7 +841,7 @@ function BookingDialog({
   // Recalculate commissions when property, channel, or base_amount changes
   // Only recalculate if we're creating a new booking (not editing) and using old commission system
   useEffect(() => {
-    if (formData.property_id && formData.booking_source && !booking && formData.booking_source === "Direct") {
+    if (formData.property_id && formData.booking_source && !booking && formData.booking_source === "Propio") {
       calculateCommissions()
     }
   }, [formData.property_id, formData.booking_source, formData.base_amount, booking])
@@ -825,7 +849,7 @@ function BookingDialog({
   // Recalcular comisiones cuando cambie el precio base y haya porcentajes configurados
   // Solo para nuevas reservas, no para edición
   useEffect(() => {
-    if (formData.booking_source !== "Direct" && commissionPercentages.sale !== null && commissionPercentages.charge !== null && !booking) {
+    if (formData.booking_source !== "Propio" && commissionPercentages.sale !== null && commissionPercentages.charge !== null && !booking) {
       const baseAmount = formData.base_amount || 0
       const saleCommission = commissionPercentages.sale ? 
         Math.round((baseAmount * commissionPercentages.sale / 100) * 100) / 100 : 0
@@ -842,7 +866,9 @@ function BookingDialog({
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
+      console.log("🔄 Loading property channels for property:", propertyId)
       const channels = await getPropertyChannels(propertyId)
+      console.log("📋 Available channels loaded:", channels)
       setAvailableChannels(channels)
     } catch (error) {
       console.error("Error loading channels:", error)
@@ -875,7 +901,15 @@ function BookingDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar fechas antes de continuar
+    // Validar que se haya seleccionado una propiedad (PRIMERO - orden de campos en pantalla)
+    if (!formData.property_id) {
+      setPropertyError("Completa este campo")
+      return
+    } else {
+      setPropertyError("")
+    }
+
+    // Validar fechas después de validar propiedad
     if (formData.check_in && formData.check_out) {
       const start = new Date(formData.check_in)
       const end = new Date(formData.check_out)
@@ -887,7 +921,7 @@ function BookingDialog({
     }
 
     // Validar ID de reserva externa cuando el canal no es "Propio"
-    if (formData.booking_source !== "Direct" && !formData.external_id?.trim()) {
+    if (formData.booking_source !== "Propio" && !formData.external_id?.trim()) {
       setExternalIdError("El ID de reserva externa es obligatorio cuando el canal no es 'Propio'")
       return
     }
@@ -913,36 +947,103 @@ function BookingDialog({
         booking_source: formData.booking_source
       })
       
-      if (formData.booking_source !== "Direct") {
-        try {
-          // First, get all property channels for this property
-          const { data: allChannels, error: channelsError } = await supabase
-            .from("property_channels")
-            .select("id, distribution_channels(name)")
-            .eq("property_id", formData.property_id)
-          
-          if (channelsError) {
-            console.error("❌ Error fetching property_channels:", channelsError)
-            property_channel_id = null
+      try {
+        // First, get all property channels for this property
+        const { data: allChannels, error: channelsError } = await supabase
+          .from("property_channels")
+          .select("id, distribution_channels(name)")
+          .eq("property_id", formData.property_id)
+        
+        console.log("📋 All property channels found:", allChannels)
+        console.log("📋 Channels error:", channelsError)
+        
+        if (channelsError) {
+          console.error("❌ Error fetching property_channels:", channelsError)
+          // If RLS error, try to create the channel anyway
+          if (channelsError.code === 'PGRST116') {
+            console.log("🔧 RLS error detected, attempting to create channel...")
           } else {
-            // Find the channel that matches the booking_source
-            const matchingChannel = allChannels?.find(channel => 
-              (channel.distribution_channels as any)?.name === formData.booking_source
-            )
-            
-            if (matchingChannel) {
-              property_channel_id = matchingChannel.id
-              console.log("✅ Found matching property_channel_id:", property_channel_id)
-            } else {
-              console.error("❌ No matching channel found for:", formData.booking_source)
-              console.log("📋 Available channels:", allChannels?.map(c => (c.distribution_channels as any)?.name))
-              property_channel_id = null
-            }
+            property_channel_id = null
           }
-        } catch (error) {
-          console.error("❌ Exception in property_channel query:", error)
-          property_channel_id = null
         }
+        
+                  // For "Direct" bookings, look for "Propio" channel
+          const channelNameToFind = formData.booking_source === "Direct" ? "Propio" : formData.booking_source
+        console.log("🔍 Looking for channel name:", channelNameToFind)
+        
+        // Find the channel that matches the booking_source
+        const matchingChannel = allChannels?.find(channel => 
+          (channel.distribution_channels as any)?.name === channelNameToFind
+        )
+        
+        console.log("🔍 Matching channel found:", matchingChannel)
+        console.log("🔍 All channels for debugging:", allChannels?.map(c => ({
+          id: c.id,
+          name: (c.distribution_channels as any)?.name
+        })))
+        
+        if (matchingChannel) {
+          property_channel_id = matchingChannel.id
+          console.log("✅ Found matching property_channel_id:", property_channel_id, "for channel:", channelNameToFind)
+        } else {
+                      // If no matching channel found and it's "Direct", create one
+            if (formData.booking_source === "Direct") {
+              console.log("🔧 Creating Propio channel for property:", formData.property_id)
+              
+              // First, get the "Propio" distribution channel
+              const { data: propioChannel, error: propioError } = await supabase
+                .from("distribution_channels")
+                .select("id")
+                .eq("name", "Propio")
+                .single()
+              
+              console.log("🔍 Propio distribution channel query result:", { propioChannel, propioError })
+              
+              if (propioError) {
+                console.error("❌ Error fetching Propio distribution channel:", propioError)
+                property_channel_id = null
+              } else if (propioChannel) {
+                console.log("✅ Found Propio distribution channel:", propioChannel)
+                
+                // Create property_channel entry for Propio
+                const { data: newPropertyChannel, error: createError } = await supabase
+                  .from("property_channels")
+                  .insert([{
+                    property_id: formData.property_id,
+                    channel_id: propioChannel.id,
+                    is_enabled: true
+                  }])
+                  .select("id")
+                  .single()
+                
+                console.log("🔍 Property channel creation result:", { newPropertyChannel, createError })
+                
+                if (createError) {
+                  console.error("❌ Error creating property_channel for Propio:", createError)
+                  console.error("🔍 Create error details:", {
+                    message: createError.message,
+                    details: createError.details,
+                    hint: createError.hint,
+                    code: createError.code
+                  })
+                  property_channel_id = null
+                } else {
+                  property_channel_id = newPropertyChannel.id
+                  console.log("✅ Created property_channel_id for Propio:", property_channel_id)
+                }
+              } else {
+                console.error("❌ Propio distribution channel not found")
+                property_channel_id = null
+              }
+          } else {
+            console.error("❌ No matching channel found for:", formData.booking_source)
+            console.log("📋 Available channels:", allChannels?.map(c => (c.distribution_channels as any)?.name))
+            property_channel_id = null
+          }
+        }
+      } catch (error) {
+        console.error("❌ Exception in property_channel query:", error)
+        property_channel_id = null
       }
 
       const submitData = {
@@ -970,9 +1071,9 @@ function BookingDialog({
       }
 
       // Ensure we have a valid property_channel_id
-      if (!property_channel_id && formData.booking_source !== "Direct") {
+      if (!property_channel_id) {
         console.error("❌ No valid property_channel_id found for booking_source:", formData.booking_source)
-        alert("Error: No se pudo encontrar el canal de distribución. Por favor, verifica la configuración del canal.")
+        alert("Error: No se pudo encontrar o crear el canal de distribución. Por favor, verifica la configuración del canal.")
         return
       }
 
@@ -992,7 +1093,12 @@ function BookingDialog({
             hint: error.hint,
             code: error.code
           })
-          throw error
+          
+          // Crear un error más descriptivo
+          const errorMessage = error.message || "Error desconocido al actualizar la reserva"
+          const enhancedError = new Error(`Error updating reservation: ${errorMessage}`)
+          enhancedError.cause = error
+          throw enhancedError
         }
         console.log("✅ Reservation updated successfully")
       } else {
@@ -1008,7 +1114,12 @@ function BookingDialog({
             hint: error.hint,
             code: error.code
           })
-          throw error
+          
+          // Crear un error más descriptivo
+          const errorMessage = error.message || "Error desconocido al crear la reserva"
+          const enhancedError = new Error(`Error creating reservation: ${errorMessage}`)
+          enhancedError.cause = error
+          throw enhancedError
         }
         console.log("✅ Reservation created successfully")
       }
@@ -1017,7 +1128,18 @@ function BookingDialog({
       onClose()
     } catch (error) {
       console.error("💥 Error saving reservation:", error)
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido"
+      
+      let errorMessage = "Error desconocido al guardar la reserva"
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === 'object' && error !== null) {
+        // Intentar extraer información del objeto de error
+        const errorObj = error as any
+        errorMessage = errorObj.message || errorObj.details || errorObj.hint || JSON.stringify(errorObj)
+      }
+      
+      console.error("📋 Full error object:", error)
       alert(`Error al guardar la reserva: ${errorMessage}`)
     }
   }
@@ -1273,9 +1395,13 @@ function BookingDialog({
                 <Label htmlFor="property_id" className="text-sm font-medium text-gray-700">Propiedad *</Label>
                 <Select
                   value={formData.property_id}
-                  onValueChange={(value) => setFormData({ ...formData, property_id: value })}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, property_id: value })
+                    // Limpiar error cuando se selecciona una propiedad
+                    if (propertyError) setPropertyError("")
+                  }}
                 >
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className={`h-10 ${propertyError ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Selecciona una propiedad" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1286,6 +1412,20 @@ function BookingDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Mostrar error de validación de propiedad */}
+                {propertyError && (
+                  <div className="relative">
+                    <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm z-10">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 bg-orange-500 rounded flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">!</span>
+                        </div>
+                        <span className="text-gray-700 text-sm">{propertyError}</span>
+                      </div>
+                      <div className="absolute top-0 left-4 transform -translate-y-1/2 w-2 h-2 bg-white border-l border-t border-gray-200 rotate-45"></div>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -1450,28 +1590,32 @@ function BookingDialog({
                     <SelectValue placeholder="Selecciona un canal" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Direct">Propio</SelectItem>
-                    {availableChannels
-                      .filter((channel) => {
-                        const channelName = channel.channel?.name || '';
-                        // Filtrar canales que podrían causar duplicación con "Propio"
-                        return channelName !== 'Propio' && 
-                               channelName !== 'Direct' && 
-                               channelName !== 'Canal Directo' &&
-                               channelName !== 'Directo';
-                      })
-                      .map((channel) => (
+                    {(() => {
+                      const filteredChannels = availableChannels
+                        .filter((channel) => {
+                          const channelName = channel.channel?.name || '';
+                          // Solo filtrar canales que realmente causan duplicación
+                          return channelName !== 'Direct' && 
+                                 channelName !== 'Canal Directo' &&
+                                 channelName !== 'Directo';
+                          // NOTA: NO filtrar 'Propio' porque es un canal válido
+                        });
+                      
+                      console.log("🎯 Filtered channels for select:", filteredChannels.map(c => c.channel?.name));
+                      
+                      return filteredChannels.map((channel) => (
                         <SelectItem key={channel.id} value={channel.channel?.name || ''}>
                           {channel.channel?.name || ''}
                         </SelectItem>
-                      ))}
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="external_id" className="text-sm font-medium text-gray-700">
-                  ID de reserva externa {formData.booking_source !== "Direct" ? "*" : ""}
+                  ID de reserva externa {formData.booking_source !== "Propio" ? "*" : ""}
                 </Label>
                 <Input
                   id="external_id"
@@ -1483,11 +1627,11 @@ function BookingDialog({
                   }}
                   placeholder="Ej: AIR-123456"
                   className={`h-10 ${externalIdError ? 'border-red-500' : ''}`}
-                  required={formData.booking_source !== "Direct"}
+                  required={formData.booking_source !== "Propio"}
                 />
                 <div className="text-xs text-gray-500">
                   ID de la reserva en el canal de distribución externo
-                  {formData.booking_source !== "Direct" && (
+                  {formData.booking_source !== "Propio" && (
                     <span className="text-red-500 ml-1">(Obligatorio para canales externos)</span>
                   )}
                 </div>

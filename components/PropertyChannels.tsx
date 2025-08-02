@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Plus, Share2, Building2 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Plus, Share2, Building2, Building } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase, isDemoMode, mockData, type Property } from "@/lib/supabase"
 
@@ -277,37 +278,49 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
          </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Selector de Propiedad (solo en modo no embebido) */}
+        {/* Property Selector */}
         {!isEmbeddedMode && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Propiedad:</label>
-            <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona una propiedad" />
-              </SelectTrigger>
-              <SelectContent>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.name} ({property.address})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Building className="h-5 w-5 mr-2" />
+                Seleccionar Propiedad
+              </CardTitle>
+              <CardDescription>
+                Elige una propiedad para gestionar sus canales de distribución
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="property-select">Propiedad</Label>
+                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                  <SelectTrigger className="w-full md:w-80">
+                    <SelectValue placeholder="Selecciona una propiedad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id}>
+                        {property.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProperty && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    <strong>Propiedad seleccionada:</strong> {selectedProperty.name}
+                    {selectedProperty.address && (
+                      <span className="block text-xs text-gray-500">
+                        {selectedProperty.address}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Información de la propiedad seleccionada (solo en modo no embebido) */}
-        {!isEmbeddedMode && selectedProperty && (
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold text-lg">{selectedProperty.name}</h3>
-            <p className="text-gray-600 text-sm">{selectedProperty.address}</p>
-                         <p className="text-gray-500 text-xs mt-1">
-               Tipo: {getPropertyTypeDisplayName(selectedProperty.type)} • 
-               Capacidad: {selectedProperty.capacity} huéspedes • 
-               Habitaciones: {selectedProperty.bedrooms}
-             </p>
-          </div>
-        )}
+
 
                  {/* Sección de canales */}
          {(selectedPropertyId || propertyId) ? (

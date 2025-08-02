@@ -416,6 +416,39 @@ export interface Booking {
   guest?: Guest
 }
 
+export interface Reservation {
+  id: string
+  guest: {
+    name?: string
+    email?: string
+    phone?: string
+    [key: string]: any
+  }
+  property_id: string
+  check_in: string
+  check_out: string
+  nights: number
+  guests: number
+  adults: number
+  children: number
+  status: string
+  payment_status: string
+  total_amount: number
+  base_amount: number
+  cleaning_fee: number
+  taxes: number
+  channel?: string
+  notes?: string
+  special_requests?: string
+  external_id?: string
+  external_source?: string
+  ical_uid?: string
+  channel_commission: number
+  collection_commission: number
+  created_at: string
+  updated_at: string
+}
+
 export interface CommissionSetting {
   id: string
   owner_id: string

@@ -30,6 +30,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Propiedades", href: "/properties", icon: Building2 },
   { name: "Reservas", href: "/bookings", icon: Bed },
+  { name: "Calendario de Propiedades", href: "/property-calendar", icon: Calendar },
   { name: "Calendario", href: "/calendar", icon: Calendar },
   { name: "Disponibilidad", href: "/availability", icon: CalendarCheck },
   { name: "Huéspedes", href: "/guests", icon: Users },
@@ -106,7 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-gray-100/40 overflow-x-hidden">
+    <div className="flex min-h-screen w-full bg-gray-100/40">
       {/* Desktop Sidebar - FIJO EN DESKTOP */}
       <aside className="hidden lg:block lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:w-72 lg:z-20">
         <SidebarContent />
@@ -133,8 +134,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Content Area - CON MARGEN EN DESKTOP */}
-      <div className="flex flex-col flex-1 lg:ml-72 max-w-full">
+      {/* Content Area */}
+      <div className="flex flex-col flex-1 lg:pl-72">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
           <Button
             variant="outline"
