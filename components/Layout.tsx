@@ -12,9 +12,7 @@ import {
   X,
   Home,
   Building2,
-  Bed,
   Calendar,
-  CalendarCheck,
   Users,
   CreditCard,
   DollarSign,
@@ -23,24 +21,23 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Share2,
+  Globe,
+  FileText,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Propiedades", href: "/properties", icon: Building2 },
-  { name: "Reservas", href: "/bookings", icon: Bed },
-  { name: "Calendario de Propiedades", href: "/property-calendar", icon: Calendar },
-  { name: "Calendario", href: "/calendar", icon: Calendar },
-  { name: "Disponibilidad", href: "/availability", icon: CalendarCheck },
+  { name: "Reservas", href: "/bookings", icon: BookOpen },
+  { name: "Calendario", href: "/property-calendar", icon: Calendar },
+  { name: "Canales de Distribución", href: "/property-channels", icon: Globe },
+  { name: "Pagos de Reservas", href: "/booking-payments", icon: CreditCard },
+  { name: "Gastos de Propiedades", href: "/property-expenses", icon: Receipt },
   { name: "Huéspedes", href: "/guests", icon: Users },
-  { name: "Tarifas", href: "/pricing", icon: CreditCard },
-  { name: "Pagos Reservas", href: "/booking-payments", icon: DollarSign },
-  { name: "Gastos", href: "/property-expenses", icon: Receipt },
-  { name: "Canales Distribución", href: "/property-channels", icon: Share2 },
-  { name: "Guía Viajero", href: "/traveler-guide-management", icon: BookOpen },
+  { name: "Precios", href: "/pricing", icon: DollarSign },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Configuración", href: "/settings", icon: Settings },
+  { name: "Gestión de Guías", href: "/traveler-guide-management", icon: FileText },
 ]
 
 function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {

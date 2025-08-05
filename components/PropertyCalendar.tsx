@@ -8,7 +8,7 @@ import PropertyStats from "./PropertyStats"
 import EnhancedCalendar from "./EnhancedCalendar"
 import AvailabilityList from "./AvailabilityList"
 
-type ViewMode = 'calendar' | 'list' | 'statistics'
+type ViewMode = 'calendar' | 'list'
 
 export default function PropertyCalendar() {
   const [properties, setProperties] = useState<Property[]>([])
@@ -117,26 +117,6 @@ export default function PropertyCalendar() {
 
   const selectedProperty = properties.find(p => p.id === selectedPropertyId)
 
-  const handleFilters = () => {
-    console.log("Abrir filtros")
-    // TODO: Implementar modal de filtros
-  }
-
-  const handleSearch = () => {
-    console.log("Abrir búsqueda")
-    // TODO: Implementar búsqueda
-  }
-
-  const handleExport = () => {
-    console.log("Exportar datos")
-    // TODO: Implementar exportación
-  }
-
-  const handleNewReservation = () => {
-    console.log("Nueva reserva")
-    // TODO: Implementar modal de nueva reserva
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -159,10 +139,6 @@ export default function PropertyCalendar() {
         selectedPropertyId={selectedPropertyId}
         onPropertyChange={setSelectedPropertyId}
         selectedProperty={selectedProperty}
-        onFilters={handleFilters}
-        onSearch={handleSearch}
-        onExport={handleExport}
-        onNewReservation={handleNewReservation}
       />
 
       {/* Statistics */}
@@ -192,17 +168,6 @@ export default function PropertyCalendar() {
               selectedPropertyId={selectedPropertyId}
               selectedProperty={selectedProperty}
             />
-          )}
-
-          {currentView === 'statistics' && (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Estadísticas Detalladas
-              </h3>
-              <p className="text-gray-500">
-                Vista de estadísticas avanzadas próximamente
-              </p>
-            </div>
           )}
         </>
       )}

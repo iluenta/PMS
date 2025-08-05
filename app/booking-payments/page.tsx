@@ -2,12 +2,12 @@
 
 import { useAuth } from "@/contexts/AuthContext"
 import { Layout } from "@/components/Layout"
-import BookingPayments from "@/components/BookingPayments"
+import Payments from "@/components/Payments"
 
 export default function BookingPaymentsPage() {
   return (
     <Layout>
-      <BookingPayments />
+      <Payments />
     </Layout>
   )
 }

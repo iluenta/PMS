@@ -43,7 +43,8 @@ import {
   Search,
   Filter,
   MessageSquare,
-  Trash2
+  Trash2,
+  DollarSign
 } from "lucide-react"
 
 export default function Bookings() {
@@ -760,6 +761,37 @@ function BookingDialog({
     sale: number | null;
     charge: number | null;
   }>({ sale: null, charge: null })
+
+  // Funciones para el estado del pago
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "partial":
+        return "bg-blue-100 text-blue-800"
+      case "refunded":
+        return "bg-gray-100 text-gray-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getPaymentStatusIcon = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <CheckCircle className="h-3 w-3" />
+      case "pending":
+        return <Clock className="h-3 w-3" />
+      case "partial":
+        return <DollarSign className="h-3 w-3" />
+      case "refunded":
+        return <AlertCircle className="h-3 w-3" />
+      default:
+        return <Clock className="h-3 w-3" />
+    }
+  }
 
   useEffect(() => {
     if (booking) {
@@ -1567,17 +1599,24 @@ function BookingDialog({
               
               <div className="space-y-2">
                 <Label htmlFor="payment_status" className="text-sm font-medium text-gray-700">Estado de pago</Label>
-                <Select value={formData.payment_status || "pending"} onValueChange={(value) => setFormData({ ...formData, payment_status: value })}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
-                    <SelectItem value="partial">Pago Parcial</SelectItem>
-                    <SelectItem value="refunded">Reembolsado</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    id="payment_status"
+                    value={formData.payment_status || "pending"}
+                    readOnly
+                    className="h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
+                    disabled
+                  />
+                  <Badge className={`${getPaymentStatusColor(formData.payment_status || "pending")} text-xs`}>
+                    <div className="flex items-center space-x-1">
+                      {getPaymentStatusIcon(formData.payment_status || "pending")}
+                      <span className="capitalize">{formData.payment_status || "pending"}</span>
+                    </div>
+                  </Badge>
+                </div>
+                <div className="text-xs text-gray-500">
+                  El estado del pago se actualiza automáticamente según los pagos registrados
+                </div>
               </div>
               
               <div className="space-y-2">

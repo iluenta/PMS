@@ -2,14 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { 
-  Building, 
-  Filter, 
-  Search, 
-  Download, 
-  Plus 
+  Building
 } from "lucide-react"
 import type { Property } from "@/lib/supabase"
 
@@ -18,21 +13,13 @@ interface PropertyConfigProps {
   selectedPropertyId: string
   onPropertyChange: (propertyId: string) => void
   selectedProperty?: Property | null
-  onFilters?: () => void
-  onSearch?: () => void
-  onExport?: () => void
-  onNewReservation?: () => void
 }
 
 export default function PropertyConfig({
   properties,
   selectedPropertyId,
   onPropertyChange,
-  selectedProperty,
-  onFilters,
-  onSearch,
-  onExport,
-  onNewReservation
+  selectedProperty
 }: PropertyConfigProps) {
   return (
     <div className="space-y-4">
@@ -75,28 +62,6 @@ export default function PropertyConfig({
           </div>
         </CardContent>
       </Card>
-
-
-
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={onFilters}>
-          <Filter className="h-4 w-4 mr-2" />
-          Filtros
-        </Button>
-        <Button variant="outline" size="sm" onClick={onSearch}>
-          <Search className="h-4 w-4 mr-2" />
-          Buscar
-        </Button>
-        <Button variant="outline" size="sm" onClick={onExport}>
-          <Download className="h-4 w-4 mr-2" />
-          Exportar
-        </Button>
-        <Button size="sm" onClick={onNewReservation}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Reserva
-        </Button>
-      </div>
     </div>
   )
 } 

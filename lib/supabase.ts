@@ -410,10 +410,44 @@ export interface Booking {
   status: string
   booking_source: string
   special_requests?: string
+  notes?: string
   created_at: string
   updated_at: string
   property?: Property
   guest?: Guest
+}
+
+export interface DistributionChannel {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  logo?: string
+}
+
+export interface PropertyChannel {
+  id: string
+  property_id: string
+  channel_id: string
+  is_enabled: boolean
+  sync_enabled: boolean
+  auto_update_ratings: boolean
+  external_property_id?: string
+  external_listing_id?: string
+  external_place_id?: string
+  listing_url?: string
+  review_url?: string
+  property_rating: number
+  property_review_count: number
+  last_rating_update?: string
+  price_adjustment_percentage: number
+  commission_override_charge?: number
+  commission_override_sale?: number
+  availability_sync_enabled: boolean
+  instant_booking_enabled: boolean
+  created_at: string
+  updated_at: string
+  channel?: DistributionChannel
 }
 
 export interface Reservation {
@@ -445,8 +479,11 @@ export interface Reservation {
   ical_uid?: string
   channel_commission: number
   collection_commission: number
+  property_channel_id: string
   created_at: string
   updated_at: string
+  property?: Property
+  property_channel?: PropertyChannel
 }
 
 export interface CommissionSetting {
@@ -562,6 +599,37 @@ export interface Channel {
   is_active: boolean
   commission_rate: number
   created_at: string
+}
+
+export interface Payment {
+  id: string
+  invoice_id?: string
+  invoice_number?: string
+  customer_name: string
+  amount: number
+  method: 'credit_card' | 'bank_transfer' | 'cash' | 'paypal' | 'check' | 'bizum'
+  status: 'pending' | 'completed' | 'failed' | 'refunded'
+  date: string
+  reference?: string
+  notes?: string
+  fee?: number
+  created_at: string
+  updated_at: string
+  reservation_id?: string
+  reservation?: Reservation
+  invoice?: Invoice
+}
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  customer_name: string
+  total_amount: number
+  status: string
+  issue_date: string
+  due_date?: string
+  created_at: string
+  updated_at: string
 }
 
 // ============================================================================
