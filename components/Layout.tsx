@@ -5,6 +5,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { useAuthRedirect } from "@/hooks/useAuthRedirect"
+import { PropertyProvider } from "@/contexts/PropertyContext"
+import { PropertySelector } from "@/components/PropertySelector"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/toaster"
 import {
@@ -84,6 +86,34 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   )
 }
 
+function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void }) {
+  const { user } = useAuth()
+
+  return (
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
+      <Button
+        variant="outline"
+        size="icon"
+        className="lg:hidden"
+        onClick={onMobileMenuToggle}
+      >
+        <Menu className="h-6 w-6" />
+        <span className="sr-only">Abrir menú</span>
+      </Button>
+      
+      {/* Property Selector - Centrado en desktop */}
+      <div className="flex-1 flex justify-center lg:justify-start">
+        <PropertySelector variant="compact" className="max-w-xs" />
+      </div>
+      
+      {/* User email - Derecha */}
+      <span className="text-sm text-gray-500 hidden sm:inline">
+        {user?.email}
+      </span>
+    </header>
+  )
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const pathname = usePathname()
@@ -104,57 +134,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-gray-100/40">
-      {/* Desktop Sidebar - FIJO EN DESKTOP */}
-      <aside className="hidden lg:block lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:w-72 lg:z-20">
-        <SidebarContent />
-      </aside>
+    <PropertyProvider>
+      <div className="flex min-h-screen w-full bg-gray-100/40">
+        {/* Desktop Sidebar - FIJO EN DESKTOP */}
+        <aside className="hidden lg:block lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:w-72 lg:z-20">
+          <SidebarContent />
+        </aside>
 
-      {/* Mobile Sidebar */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="relative flex w-72 max-w-[calc(100%-3rem)] flex-1 flex-col bg-white">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-4 right-4"
+        {/* Mobile Sidebar */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/60"
               onClick={() => setMobileMenuOpen(false)}
-            >
-              <X className="h-6 w-6" />
-            </Button>
-            <SidebarContent onLinkClick={() => setMobileMenuOpen(false)} />
+            />
+            <div className="relative flex w-72 max-w-[calc(100%-3rem)] flex-1 flex-col bg-white">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-4"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <X className="h-6 w-6" />
+              </Button>
+              <SidebarContent onLinkClick={() => setMobileMenuOpen(false)} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Content Area */}
-      <div className="flex flex-col flex-1 lg:pl-72">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
-          <Button
-            variant="outline"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-            <span className="sr-only">Abrir menú</span>
-          </Button>
-          <div className="flex-1">
-            {/* Header content can go here */}
-          </div>
-          <span className="text-sm text-gray-500 hidden sm:inline">
-            {user.email}
-          </span>
-        </header>
-        <main className="flex-1 space-y-4 p-4 lg:p-6">
-          {children}
-        </main>
+        {/* Content Area */}
+        <div className="flex flex-col flex-1 lg:pl-72">
+          <HeaderContent onMobileMenuToggle={() => setMobileMenuOpen(true)} />
+          <main className="flex-1 space-y-4 p-4 lg:p-6">
+            {children}
+          </main>
+        </div>
+        <Toaster />
       </div>
-      <Toaster />
-    </div>
+    </PropertyProvider>
   )
 }

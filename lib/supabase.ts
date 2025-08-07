@@ -299,7 +299,7 @@ const mockExpenses = [
 // Supabase Client Initialization (Singleton Pattern)
 // ============================================================================
 
-let supabase: SupabaseClient
+let supabase: SupabaseClient | null = null
 
 function getSupabaseClient() {
   if (!supabase) {
@@ -310,7 +310,15 @@ function getSupabaseClient() {
       if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
         console.warn("Supabase URL or Anon Key is missing, but not in demo mode. Auth will likely fail.")
       }
-      // In demo mode or if keys are missing, we don't create a real client
+      // Create a dummy client to prevent undefined errors
+      supabase = createClient("https://dummy.supabase.co", "dummy-key", {
+        auth: {
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
     } else {
       supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
@@ -408,6 +416,7 @@ export interface Booking {
   total_commission?: number
   net_amount?: number
   status: string
+  payment_status?: string
   booking_source: string
   special_requests?: string
   notes?: string
@@ -437,8 +446,8 @@ export interface PropertyChannel {
   external_place_id?: string
   listing_url?: string
   review_url?: string
-  property_rating: number
-  property_review_count: number
+  property_rating?: number
+  property_review_count?: number
   last_rating_update?: string
   price_adjustment_percentage: number
   commission_override_charge?: number

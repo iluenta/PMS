@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import QuickAvailabilityCheck from "./QuickAvailabilityCheck"
 import { supabase, type Property, type Reservation } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
 
 interface AvailabilityPeriod {
   startDate: Date
@@ -21,15 +22,8 @@ interface AvailabilityPeriod {
   reason?: string
 }
 
-interface AvailabilityListProps {
-  selectedPropertyId: string
-  selectedProperty?: Property | null
-}
-
-export default function AvailabilityList({ 
-  selectedPropertyId, 
-  selectedProperty 
-}: AvailabilityListProps) {
+export default function AvailabilityList() {
+  const { selectedProperty } = useProperty()
   const [availabilityPeriods, setAvailabilityPeriods] = useState<AvailabilityPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [quickQueryResult, setQuickQueryResult] = useState<{
@@ -38,20 +32,22 @@ export default function AvailabilityList({
   } | null>(null)
 
   useEffect(() => {
-    if (selectedPropertyId) {
+    if (selectedProperty) {
       calculateAvailabilityPeriods()
     }
-  }, [selectedPropertyId])
+  }, [selectedProperty])
 
   const calculateAvailabilityPeriods = async () => {
     try {
+      if (!selectedProperty) return
+      
       setLoading(true)
 
       // Obtener reservas de la propiedad
       const { data: reservationsData, error } = await supabase
         .from("reservations")
         .select("*")
-        .eq("property_id", selectedPropertyId)
+        .eq("property_id", selectedProperty.id)
         .eq("status", "confirmed")
 
       if (error) throw error
@@ -209,7 +205,7 @@ export default function AvailabilityList({
       const { data: reservationsData, error } = await supabase
         .from("reservations")
         .select("*")
-        .eq("property_id", selectedPropertyId)
+        .eq("property_id", selectedProperty?.id)
         .eq("status", "confirmed")
       
       if (error) throw error
@@ -258,7 +254,6 @@ export default function AvailabilityList({
     <div className="space-y-6">
       {/* Quick Availability Check Section */}
       <QuickAvailabilityCheck 
-        selectedPropertyId={selectedPropertyId}
         onCheckAvailability={handleQuickAvailabilityCheck}
       />
       

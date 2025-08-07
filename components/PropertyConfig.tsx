@@ -1,60 +1,50 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { 
   Building
 } from "lucide-react"
+import { useProperty } from "@/hooks/useProperty"
 import type { Property } from "@/lib/supabase"
 
 interface PropertyConfigProps {
-  properties: Property[]
-  selectedPropertyId: string
-  onPropertyChange: (propertyId: string) => void
   selectedProperty?: Property | null
 }
 
 export default function PropertyConfig({
-  properties,
-  selectedPropertyId,
-  onPropertyChange,
   selectedProperty
 }: PropertyConfigProps) {
+  const { selectedProperty: contextProperty } = useProperty()
+  const property = selectedProperty || contextProperty
+
   return (
     <div className="space-y-4">
-      {/* Property Selector */}
+      {/* Property Display */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <Building className="h-5 w-5 mr-2" />
-            Seleccionar Propiedad
+            Propiedad Seleccionada
           </CardTitle>
           <CardDescription>
-            Elige una propiedad para gestionar su calendario y disponibilidad
+            Propiedad actual para gestionar su calendario y disponibilidad
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Label htmlFor="property-select">Propiedad</Label>
-            <Select value={selectedPropertyId} onValueChange={onPropertyChange}>
-              <SelectTrigger className="w-full md:w-80">
-                <SelectValue placeholder="Selecciona una propiedad" />
-              </SelectTrigger>
-              <SelectContent>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedProperty && (
+            <Label htmlFor="property-display">Propiedad</Label>
+            <div className="h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center">
+              <span className="text-gray-600 text-sm">
+                {property?.name || "No hay propiedad seleccionada"}
+              </span>
+            </div>
+            {property && (
               <div className="text-sm text-gray-600 mt-2">
-                <strong>Propiedad seleccionada:</strong> {selectedProperty.name}
-                {selectedProperty.address && (
+                <strong>Propiedad seleccionada:</strong> {property.name}
+                {property.address && (
                   <span className="block text-xs text-gray-500">
-                    {selectedProperty.address}
+                    {property.address}
                   </span>
                 )}
               </div>

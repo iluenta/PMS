@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { supabase, type Property, type Reservation } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
 
 interface CalendarBooking {
   id: string
@@ -29,15 +30,8 @@ interface DayInfo {
   checkOutGuestName?: string
 }
 
-interface EnhancedCalendarProps {
-  selectedPropertyId: string
-  selectedProperty?: Property | null
-}
-
-export default function EnhancedCalendar({ 
-  selectedPropertyId, 
-  selectedProperty 
-}: EnhancedCalendarProps) {
+export default function EnhancedCalendar() {
+  const { selectedProperty } = useProperty()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [bookings, setBookings] = useState<CalendarBooking[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,13 +44,15 @@ export default function EnhancedCalendar({
   const dayNames = ["L", "M", "X", "J", "V", "S", "D"]
 
   useEffect(() => {
-    if (selectedPropertyId) {
+    if (selectedProperty) {
       fetchBookings()
     }
-  }, [selectedPropertyId])
+  }, [selectedProperty])
 
   const fetchBookings = async () => {
     try {
+      if (!selectedProperty) return
+      
       setLoading(true)
       
       const { data: reservationsData, error } = await supabase
@@ -67,7 +63,7 @@ export default function EnhancedCalendar({
             channel:distribution_channels(*)
           )
         `)
-        .eq("property_id", selectedPropertyId)
+        .eq("property_id", selectedProperty.id)
         .neq("status", "cancelled")
 
       if (error) throw error

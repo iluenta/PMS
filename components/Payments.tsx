@@ -17,49 +17,28 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase, type Payment, type Property, type Reservation } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
 
 export default function Payments() {
   const [payments, setPayments] = useState<Payment[]>([])
-  const [properties, setProperties] = useState<Property[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("")
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
 
-  useEffect(() => {
-    fetchProperties()
-  }, [])
+  const { selectedProperty } = useProperty()
 
   useEffect(() => {
-    if (selectedPropertyId) {
-      fetchReservations(selectedPropertyId)
-      fetchPayments(selectedPropertyId)
-      const property = properties.find(p => p.id === selectedPropertyId)
-      setSelectedProperty(property || null)
+    if (selectedProperty) {
+      fetchReservations(selectedProperty.id)
+      fetchPayments(selectedProperty.id)
     } else {
       setReservations([])
       setPayments([])
-      setSelectedProperty(null)
+      setLoading(false)
     }
-  }, [selectedPropertyId, properties])
-
-  const fetchProperties = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .eq("is_active", true)
-        .order("name")
-
-      if (error) throw error
-      setProperties(data || [])
-    } catch (error) {
-      console.error("Error fetching properties:", error)
-    }
-  }
+  }, [selectedProperty])
 
   const fetchReservations = async (propertyId: string) => {
     try {
@@ -92,10 +71,31 @@ export default function Payments() {
       setLoading(true)
       console.log("🔍 Fetching payments for property:", propertyId)
       
-      // Obtengo todos los pagos sin filtro por ahora
-      const { data: allPayments, error: paymentsError } = await supabase
+      // Primero obtener todas las reservas de la propiedad
+      const { data: propertyReservations, error: reservationsError } = await supabase
+        .from("reservations")
+        .select("id")
+        .eq("property_id", propertyId)
+
+      if (reservationsError) {
+        console.error("❌ Error fetching property reservations:", reservationsError)
+        throw reservationsError
+      }
+
+      const reservationIds = propertyReservations?.map(r => r.id) || []
+      console.log("📊 Found reservation IDs:", reservationIds)
+
+      if (reservationIds.length === 0) {
+        console.log("📊 No reservations found for property, setting empty payments")
+        setPayments([])
+        return
+      }
+
+      // Luego obtener los pagos que correspondan a estas reservas
+      const { data: paymentsData, error: paymentsError } = await supabase
         .from("payments")
         .select("*")
+        .in("reservation_id", reservationIds)
         .order("date", { ascending: false })
 
       if (paymentsError) {
@@ -103,13 +103,13 @@ export default function Payments() {
         throw paymentsError
       }
 
-      console.log("📊 Total payments found:", allPayments?.length || 0)
-      console.log("📋 Sample payments:", allPayments?.slice(0, 3))
+      console.log("📊 Total payments found:", paymentsData?.length || 0)
+      console.log("📋 Sample payments:", paymentsData?.slice(0, 3))
 
-      // Por ahora, mostrar todos los pagos para debuggear
-      setPayments(allPayments || [])
+      setPayments(paymentsData || [])
     } catch (error) {
       console.error("❌ Error fetching payments:", error)
+      setPayments([])
     } finally {
       setLoading(false)
     }
@@ -187,6 +187,7 @@ export default function Payments() {
   }
 
   const handleAdd = () => {
+    console.log("➕ Opening new payment dialog")
     setEditingPayment(null)
     setIsDialogOpen(true)
   }
@@ -205,8 +206,8 @@ export default function Payments() {
       if (error) throw error
 
       // Recargar los datos
-      if (selectedPropertyId) {
-        await fetchPayments(selectedPropertyId)
+      if (selectedProperty) {
+        await fetchPayments(selectedProperty.id)
       }
     } catch (error) {
       console.error("Error deleting payment:", error)
@@ -223,65 +224,29 @@ export default function Payments() {
         </div>
       </div>
 
-      {/* Selector de Propiedad */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Building className="h-5 w-5 mr-2" />
-            Seleccionar Propiedad
-          </CardTitle>
-          <CardDescription>
-            Elige una propiedad para gestionar sus pagos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="property-select">Propiedad</Label>
-            <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-              <SelectTrigger className="w-full md:w-80">
-                <SelectValue placeholder="Selecciona una propiedad" />
-              </SelectTrigger>
-              <SelectContent>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedProperty && (
-              <div className="text-sm text-gray-600 mt-2">
-                <strong>Propiedad seleccionada:</strong> {selectedProperty.name}
-                {selectedProperty.address && (
-                  <span className="block text-xs text-gray-500">
-                    {selectedProperty.address}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Lista de Pagos */}
-      {selectedPropertyId && (
+      {selectedProperty ? (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Pagos de {selectedProperty?.name}</h2>
+            <h2 className="text-xl font-semibold">Pagos de {selectedProperty.name}</h2>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={handleAdd} disabled={!selectedPropertyId}>
+                <Button onClick={handleAdd} disabled={!selectedProperty}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nuevo Pago
                 </Button>
               </DialogTrigger>
               <PaymentDialog
                 payment={editingPayment}
-                propertyId={selectedPropertyId}
+                propertyId={selectedProperty.id}
                 reservations={reservations}
                 getReservationPaymentProgress={getReservationPaymentProgress}
-                onClose={() => setIsDialogOpen(false)}
-                onSave={() => fetchPayments(selectedPropertyId)}
+                onClose={() => {
+                  console.log("🚪 Closing dialog and clearing state")
+                  setIsDialogOpen(false)
+                  setEditingPayment(null)
+                }}
+                onSave={() => fetchPayments(selectedProperty.id)}
               />
             </Dialog>
           </div>
@@ -293,9 +258,9 @@ export default function Payments() {
           ) : payments.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
-                <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No hay pagos</h3>
-                <p className="text-gray-500 mb-4">Los pagos de esta propiedad aparecerán aquí</p>
+                <p className="text-gray-500 mb-4">Comienza agregando tu primer pago</p>
                 <Button onClick={handleAdd}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nuevo Pago
@@ -305,67 +270,81 @@ export default function Payments() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {payments.map((payment) => (
-                <Card key={payment.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
+                <Card key={payment.id} className="p-4">
+                  <div className="flex flex-col space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <CreditCard className="h-6 w-6 text-blue-600" />
+                        <div className="flex-shrink-0">
+                          <CreditCard className="h-6 w-6 text-blue-600" />
+                        </div>
                         <div>
-                          <CardTitle className="text-base">
-                            €{payment.amount.toFixed(2)}
-                          </CardTitle>
-                          <CardDescription className="text-xs">
-                            {payment.customer_name}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end space-y-2">
-                        <Badge className={getStatusColor(payment.status)}>
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(payment.status)}
-                            <span className="capitalize text-xs">{payment.status}</span>
-                          </div>
-                        </Badge>
-                        <div className="flex space-x-1">
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(payment)}>
-                            <Edit className="h-3 w-3 mr-1" />
-                            Editar
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleDelete(payment)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Eliminar
-                          </Button>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            {payment.customer_name || "Cliente sin nombre"}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            {payment.reference && `Ref: ${payment.reference}`}
+                            {payment.reference && payment.date && " • "}
+                            {payment.date && new Date(payment.date).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Método:</span>
-                        <span className="font-medium">{getMethodLabel(payment.method)}</span>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-lg font-semibold text-gray-900">
+                          €{payment.amount.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {getMethodLabel(payment.method)}
+                        </p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Fecha:</span>
-                        <span className="font-medium">{new Date(payment.date).toLocaleDateString()}</span>
-                      </div>
-                      {payment.reference && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Ref:</span>
-                          <span className="font-medium">{payment.reference}</span>
-                        </div>
-                      )}
+                      <Badge className={getStatusColor(payment.status)}>
+                        {getStatusIcon(payment.status)}
+                        <span className="ml-1 text-xs">
+                          {payment.status === "completed" && "Completado"}
+                          {payment.status === "pending" && "Pendiente"}
+                          {payment.status === "failed" && "Fallido"}
+                          {payment.status === "refunded" && "Reembolsado"}
+                        </span>
+                      </Badge>
                     </div>
-                  </CardContent>
+                    
+                    {payment.notes && (
+                      <div className="p-2 bg-gray-50 rounded">
+                        <p className="text-xs text-gray-600">{payment.notes}</p>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-end space-x-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(payment)}
+                        className="h-8 px-2"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(payment)}
+                        className="text-red-600 hover:text-red-700 h-8 px-2"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
                 </Card>
               ))}
             </div>
           )}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Selecciona una propiedad</h3>
+          <p className="text-gray-500">Elige una propiedad para ver sus pagos</p>
         </div>
       )}
     </div>
@@ -399,12 +378,96 @@ function PaymentDialog({
     reservation_id: "",
   })
 
-  // Función para obtener reservas no pagadas al 100%
+  const { selectedProperty } = useProperty()
+
+  // Función para limpiar el formulario
+  const clearForm = () => {
+    console.log("🧹 Clearing form data")
+    setFormData({
+      customer_name: "",
+      amount: 0,
+      method: "credit_card" as Payment['method'],
+      status: "pending" as Payment['status'],
+      date: new Date().toISOString().split('T')[0],
+      reference: "",
+      notes: "",
+      fee: 0,
+      reservation_id: "",
+    })
+  }
+
+  // Función para obtener reservas no pagadas al 100% de la propiedad seleccionada
   const getUnpaidReservations = () => {
+    if (!selectedProperty) return []
+    
     return reservations.filter(reservation => {
+      // Asegurar que la reserva pertenece a la propiedad seleccionada
+      if (reservation.property_id !== selectedProperty.id) return false
+      
       const progress = getReservationPaymentProgress(reservation.id)
       return progress.percentage < 100
     })
+  }
+
+  // Función para calcular el importe requerido según el canal
+  const calculateRequiredAmount = (reservation: Reservation): number => {
+    // Determinar el canal de la reserva
+    let channelName = 'Propio' // Default
+    
+    // Verificar si hay property_channel configurado
+    if (reservation.property_channel?.channel?.name) {
+      channelName = reservation.property_channel.channel.name
+    } else if (reservation.external_source) {
+      // Si no hay property_channel, usar external_source
+      channelName = reservation.external_source
+    }
+    
+    // Normalizar nombres de canal propio
+    const propioChannels = ['Propio', 'Direct', 'Direct Booking', 'Canal Directo', 'Directo']
+    const isPropioChannel = propioChannels.some(name => 
+      channelName.toLowerCase().includes(name.toLowerCase())
+    )
+    
+    // Siempre calcular el importe requerido restando las comisiones
+    const channelCommission = reservation.channel_commission || 0
+    const collectionCommission = reservation.collection_commission || 0
+    const totalCommissions = channelCommission + collectionCommission
+    
+    let result: number
+    
+    if (isPropioChannel && totalCommissions === 0) {
+      // Para canal propio sin comisiones: TOTAL (sin comisiones)
+      result = reservation.total_amount || 0
+    } else {
+      // Para canales con comisiones o canales propios con comisiones configuradas:
+      // TOTAL - (comisión venta + comisión cobro) - [(comisión venta + comisión cobro) * 21%]
+      // O lo que es lo mismo: TOTAL - (comisión venta + comisión cobro) * 1.21
+      const totalCommissionsWithIVA = totalCommissions * 1.21
+      result = (reservation.total_amount || 0) - totalCommissionsWithIVA
+    }
+    
+    // Redondear a 2 decimales como en el ejemplo: 479.29
+    const roundedResult = Math.round(result * 100) / 100
+    const finalResult = Math.max(0, roundedResult)
+    
+    console.log('calculateRequiredAmount:', {
+      reservationId: reservation.id,
+      channelName,
+      isPropioChannel,
+      total_amount: reservation.total_amount,
+      channel_commission: channelCommission,
+      collection_commission: collectionCommission,
+      totalCommissions,
+      totalCommissionsWithIVA: totalCommissions * 1.21,
+      result,
+      roundedResult,
+      finalResult,
+      // Agregar información adicional para debugging
+      raw_channel_commission: reservation.channel_commission,
+      raw_collection_commission: reservation.collection_commission
+    })
+    
+    return finalResult
   }
 
   // Función para auto-rellenar el nombre del huésped cuando se selecciona una reserva
@@ -420,10 +483,14 @@ function PaymentDialog({
   }
 
   useEffect(() => {
+    console.log("🔄 useEffect triggered with payment:", payment)
+    
     if (payment) {
+      // Si hay un pago, cargar sus datos para edición
+      console.log("📝 Loading payment data for editing:", payment)
       setFormData({
         customer_name: payment.customer_name,
-        amount: payment.amount,
+        amount: payment.amount || 0,
         method: payment.method,
         status: payment.status,
         date: payment.date.split('T')[0],
@@ -432,6 +499,9 @@ function PaymentDialog({
         fee: payment.fee || 0,
         reservation_id: payment.reservation_id || "no_reservation",
       })
+    } else {
+      // Si no hay pago, limpiar el formulario para nuevo pago
+      clearForm()
     }
   }, [payment])
 
@@ -439,6 +509,65 @@ function PaymentDialog({
     e.preventDefault()
 
     try {
+      // Validación del importe del pago
+      if (formData.reservation_id && formData.reservation_id !== "no_reservation" && formData.amount > 0) {
+        const selectedReservation = reservations.find(r => r.id === formData.reservation_id)
+        if (selectedReservation) {
+          // Calcular el importe requerido para esta reserva
+          const requiredAmount = calculateRequiredAmount(selectedReservation)
+          
+          // Obtener los pagos existentes para esta reserva (excluyendo el pago actual si estamos editando)
+          const { data: existingPayments } = await supabase
+            .from("payments")
+            .select("id, amount")
+            .eq("reservation_id", formData.reservation_id)
+            .eq("status", "completed")
+          
+          let totalExistingPayments = 0
+          if (existingPayments) {
+            totalExistingPayments = existingPayments.reduce((sum, p) => {
+              // Si estamos editando, excluir el importe del pago actual
+              if (payment && p.id === payment.id) {
+                return sum
+              }
+              return sum + (p.amount || 0)
+            }, 0)
+          }
+          
+          const pendingAmount = Math.max(0, requiredAmount - totalExistingPayments)
+          const newTotalPayments = totalExistingPayments + formData.amount
+          
+          // Debug logging
+          console.log('Payment validation:', {
+            reservationId: formData.reservation_id,
+            requiredAmount,
+            totalExistingPayments,
+            newPaymentAmount: formData.amount,
+            newTotalPayments,
+            pendingAmount,
+            isEditing: !!payment
+          })
+          
+          // Validar que no se exceda el importe requerido
+          if (newTotalPayments > requiredAmount) {
+            const excessAmount = newTotalPayments - requiredAmount
+            const warningMessage = `⚠️ Advertencia: El importe del pago excede el importe requerido.
+
+Importe requerido: €${requiredAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Pagos realizados: €${totalExistingPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Importe pendiente: €${pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+¿Desea continuar con el pago de todas formas?`
+
+            const shouldContinue = confirm(warningMessage)
+            if (!shouldContinue) {
+              return
+            }
+          }
+        }
+      }
+
       const paymentData = {
         ...formData,
         reservation_id: formData.reservation_id === "no_reservation" ? null : formData.reservation_id,
@@ -515,8 +644,12 @@ function PaymentDialog({
               type="number"
               min="0"
               step="0.01"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: Number.parseFloat(e.target.value) })}
+              value={formData.amount || ""}
+              onChange={(e) => {
+                const value = e.target.value
+                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                setFormData({ ...formData, amount: numValue })
+              }}
               required
             />
           </div>
@@ -579,8 +712,12 @@ function PaymentDialog({
               type="number"
               min="0"
               step="0.01"
-              value={formData.fee}
-              onChange={(e) => setFormData({ ...formData, fee: Number.parseFloat(e.target.value) })}
+              value={formData.fee || ""}
+              onChange={(e) => {
+                const value = e.target.value
+                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                setFormData({ ...formData, fee: numValue })
+              }}
             />
           </div>
         </div>

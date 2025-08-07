@@ -117,7 +117,6 @@ export default function Dashboard() {
     }
   }
 
-  // Rest of the component remains the same...
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed":
@@ -154,12 +153,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-gray-600">
-          Resumen general de tu negocio de apartamentos turísticos
-          {isDemoMode && <span className="ml-2 text-blue-600 font-medium">(Modo Demo)</span>}
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-2 text-gray-600">Resumen general de tu negocio</p>
+        </div>
       </div>
 
       {/* Stats Cards */}

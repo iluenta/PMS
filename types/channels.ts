@@ -20,8 +20,8 @@ export interface PropertyChannel {
   external_place_id?: string
   listing_url?: string
   review_url?: string
-  property_rating: number
-  property_review_count: number
+  property_rating?: number
+  property_review_count?: number
   last_rating_update?: string
   price_adjustment_percentage: number
   commission_override_charge?: number

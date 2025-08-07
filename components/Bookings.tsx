@@ -22,10 +22,12 @@ import {
   type Booking, 
   type Property, 
   type Guest, 
-  calculateBookingFinancials
+  calculateBookingFinancials,
+  isDemoMode
 } from "@/lib/supabase"
 import { getPropertyChannels } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
+import { useProperty } from "@/hooks/useProperty"
 import { 
   Calendar, 
   Plus, 
@@ -54,18 +56,26 @@ export default function Bookings() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
+  const [reservationPayments, setReservationPayments] = useState<{[key: string]: any[]}>({})
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [propertyFilter, setPropertyFilter] = useState<string>("all")
   const [channelFilter, setChannelFilter] = useState<string>("all")
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("pending")
   const [sortFilter, setSortFilter] = useState<string>("checkin_asc")
 
+  // Global property context
+  const { selectedProperty } = useProperty()
+
   // Filtered and sorted bookings
   const filteredBookings = useMemo(() => {
     let filtered = [...bookings]
+
+    // Filter by selected property (global context)
+    if (selectedProperty) {
+      filtered = filtered.filter((booking) => booking.property_id === selectedProperty.id)
+    }
 
     // Search filter (name, email, property)
     if (searchTerm.trim()) {
@@ -84,11 +94,6 @@ export default function Bookings() {
     // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((booking) => booking.status === statusFilter)
-    }
-
-    // Property filter
-    if (propertyFilter !== "all") {
-      filtered = filtered.filter((booking) => booking.property_id === propertyFilter)
     }
 
     // Channel filter
@@ -143,7 +148,7 @@ export default function Bookings() {
     })
 
     return filtered
-  }, [bookings, searchTerm, statusFilter, propertyFilter, channelFilter, dateRangeFilter, sortFilter])
+  }, [bookings, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter, selectedProperty])
 
   // Get unique channels for filter
   const availableChannels = useMemo(() => {
@@ -178,14 +183,14 @@ export default function Bookings() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [selectedProperty])
 
   const fetchData = async () => {
     try {
       console.log("🔄 Fetching reservations data...")
       
-      // Fetch reservations data with property_channel information
-      const { data: reservationsData, error: reservationsError } = await supabase
+      // Build query based on selected property
+      let query = supabase
         .from("reservations")
         .select(`
           *,
@@ -195,6 +200,14 @@ export default function Bookings() {
           )
         `)
         .order("created_at", { ascending: false })
+
+      // Filter by selected property if available
+      if (selectedProperty) {
+        query = query.eq("property_id", selectedProperty.id)
+        console.log("🎯 Filtering reservations for property:", selectedProperty.name, "ID:", selectedProperty.id)
+      }
+
+      const { data: reservationsData, error: reservationsError } = await query
 
       console.log("📊 Reservations data:", reservationsData)
       console.log("❌ Reservations error:", reservationsError)
@@ -208,18 +221,9 @@ export default function Bookings() {
       console.log("🏠 Properties data:", propertiesData)
       console.log("❌ Properties error:", propertiesError)
 
-            if (reservationsData) {
+      if (reservationsData) {
         // Transform reservations data to match our Booking interface
         const transformedReservations = reservationsData.map((reservation) => {
-          // Debug: Log the reservation data to understand the structure
-          console.log("🔍 Processing reservation:", {
-            id: reservation.id,
-            property_channels: reservation.property_channels,
-            channel: reservation.property_channels?.channel,
-            external_source: reservation.external_source,
-            external_id: reservation.external_id
-          })
-          
           // Determine booking_source with better logic
           let bookingSource = 'Direct' // Default
           if (reservation.property_channels?.channel?.name) {
@@ -227,8 +231,6 @@ export default function Bookings() {
           } else if (reservation.external_source) {
             bookingSource = reservation.external_source
           }
-          
-          console.log("🔍 Determined booking_source:", bookingSource)
           
           return {
             ...reservation,
@@ -239,6 +241,8 @@ export default function Bookings() {
             // Ensure commission fields are properly included
             channel_commission: reservation.channel_commission || 0,
             collection_commission: reservation.collection_commission || 0,
+            // Include payment_status from reservation
+            payment_status: reservation.payment_status || 'pending',
             // Transform the JSONB guest field to match expected structure
             property: null, // We'll handle this separately
             guest: reservation.guest ? {
@@ -256,12 +260,68 @@ export default function Bookings() {
             } : null
           }
         })
+        
+        console.log("✅ Transformed reservations count:", transformedReservations.length)
+        
+        // Log específico para debugging - mostrar los primeros 3 registros
+        if (transformedReservations.length > 0) {
+          console.log("🔍 Sample reservation data:", transformedReservations.slice(0, 3).map(r => ({
+            id: r.id,
+            booking_source: r.booking_source,
+            total_amount: r.total_amount,
+            channel_commission: r.channel_commission,
+            collection_commission: r.collection_commission,
+            guest_name: r.guest ? `${r.guest.first_name} ${r.guest.last_name}` : 'No guest'
+          })))
+        }
+        
         setBookings(transformedReservations)
       }
       
       if (propertiesData) setProperties(propertiesData)
       // No longer fetch guests since we don't use that table
       setGuests([]) // Set empty array since we handle guest data differently
+
+      // Fetch payments for each reservation
+      if (reservationsData && reservationsData.length > 0) {
+        const paymentsMap: {[key: string]: any[]} = {}
+        
+        for (const reservation of reservationsData) {
+          // Obtener todos los pagos para esta reserva
+          const { data: allPaymentsData, error: paymentsError } = await supabase
+            .from("payments")
+            .select("*")
+            .eq("reservation_id", reservation.id)
+          
+          // Filtrar solo los pagos válidos (no 'failed' ni 'refunded')
+          const validPayments = allPaymentsData?.filter(p => p.status !== 'failed' && p.status !== 'refunded') || []
+          
+          if (validPayments.length > 0) {
+            paymentsMap[reservation.id] = validPayments
+            console.log("💰 Found", validPayments.length, "valid payments for reservation", reservation.id, ":", validPayments.map(p => ({ id: p.id, amount: p.amount, status: p.status })))
+          } else {
+            paymentsMap[reservation.id] = []
+            console.log("⚠️ No valid payments found for reservation", reservation.id)
+          }
+        }
+        
+        console.log("📊 Payments map created with", Object.keys(paymentsMap).length, "reservations")
+        
+        // Log específico para debugging - mostrar los pagos encontrados
+        const paymentsWithData = Object.entries(paymentsMap).filter(([id, payments]) => payments.length > 0)
+        if (paymentsWithData.length > 0) {
+          console.log("🔍 Sample payments data:", paymentsWithData.slice(0, 3).map(([id, payments]) => ({
+            reservation_id: id,
+            payments_count: payments.length,
+            total_amount: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
+            payments: payments.map(p => ({ id: p.id, amount: p.amount, status: p.status }))
+          })))
+        } else {
+          console.log("⚠️ No payments found for any reservations")
+        }
+        
+        setReservationPayments(paymentsMap)
+      }
 
       // If no data exists, show information about it
       if (!reservationsData || reservationsData.length === 0) {
@@ -308,6 +368,32 @@ export default function Bookings() {
     }
   }
 
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800 hover:bg-green-200"
+      case "partial":
+        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+      case "pending":
+        return "bg-red-100 text-red-800 hover:bg-red-200"
+      default:
+        return "bg-gray-100 text-gray-800 hover:bg-gray-200"
+    }
+  }
+
+  const getPaymentStatusIcon = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <CheckCircle className="h-3 w-3" />
+      case "pending":
+        return <Clock className="h-3 w-3" />
+      case "partial":
+        return <AlertCircle className="h-3 w-3" />
+      default:
+        return <Clock className="h-3 w-3" />
+    }
+  }
+
   const handleEdit = (booking: Booking) => {
     setEditingBooking(booking)
     setIsDialogOpen(true)
@@ -321,21 +407,24 @@ export default function Bookings() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
       try {
+        if (isDemoMode) {
+          console.log("Demo mode: Would delete booking", id)
+          return
+        }
+
         const { error } = await supabase
-                  .from("reservations")
-        .delete()
+          .from("reservations")
+          .delete()
           .eq("id", id)
-        
+
         if (error) {
-          console.error("❌ Error deleting reservation:", error)
-          alert(`Error al eliminar la reserva: ${error.message}`)
+          console.error("Error deleting booking:", error)
         } else {
-          console.log("✅ Reservation deleted successfully")
-          fetchData() // Refresh the list
+          console.log("Booking deleted successfully")
+          fetchData()
         }
       } catch (error) {
-        console.error("💥 Error deleting reservation:", error)
-        alert("Error desconocido al eliminar la reserva.")
+        console.error("Error deleting booking:", error)
       }
     }
   }
@@ -345,6 +434,50 @@ export default function Bookings() {
     const end = new Date(checkOut)
     const diffTime = Math.abs(end.getTime() - start.getTime())
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  // Función para calcular el importe requerido según el canal
+  const calculateRequiredAmount = (booking: Booking): number => {
+    const channelName = booking.booking_source || 'Propio'
+    const totalAmount = booking.total_amount || 0
+    
+    if (channelName === 'Propio' || channelName === 'Direct') {
+      // Para canal propio: TOTAL (sin comisiones)
+      return totalAmount
+    } else {
+      // Para otros canales: TOTAL - [(comisión venta + comisión cobro) * 21%]
+      const channelCommission = booking.channel_commission || 0
+      const collectionCommission = booking.collection_commission || 0
+      const totalCommissions = channelCommission + collectionCommission
+      const commissionTax = totalCommissions * 0.21
+      const requiredAmount = totalAmount - commissionTax
+      
+      return Math.max(0, requiredAmount) // Asegurar que no sea negativo
+    }
+  }
+
+  // Función para calcular el estado del pago basándose en los pagos reales
+  const calculatePaymentStatus = (booking: Booking, payments: any[]): string => {
+    const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+    const requiredAmount = calculateRequiredAmount(booking)
+
+    // Si no hay importe requerido, considerar como pagado
+    if (requiredAmount <= 0) {
+      return 'paid'
+    }
+    
+    // Si los pagos cubren o superan el importe requerido
+    if (totalPayments >= requiredAmount) {
+      return 'paid'
+    } 
+    // Si hay pagos pero no cubren el importe requerido
+    else if (totalPayments > 0) {
+      return 'partial'
+    } 
+    // Si no hay pagos
+    else {
+      return 'pending'
+    }
   }
 
   if (loading) {
@@ -375,6 +508,9 @@ export default function Bookings() {
             guests={guests}
             onClose={() => setIsDialogOpen(false)}
             onSave={fetchData}
+            reservationPayments={reservationPayments}
+            calculateRequiredAmount={calculateRequiredAmount}
+            calculatePaymentStatus={calculatePaymentStatus}
           />
         </Dialog>
       </div>
@@ -415,24 +551,6 @@ export default function Bookings() {
                 <SelectItem value="pending">Pendientes</SelectItem>
                 <SelectItem value="cancelled">Canceladas</SelectItem>
                 <SelectItem value="completed">Completadas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Propiedad */}
-          <div className="space-y-2">
-            <Label htmlFor="property">Propiedad</Label>
-            <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las propiedades" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las propiedades</SelectItem>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.name}
-                  </SelectItem>
-                ))}
               </SelectContent>
             </Select>
           </div>
@@ -575,6 +693,42 @@ export default function Bookings() {
                     </div>
                   </Badge>
                 </div>
+                
+                {/* Estado del Pago */}
+                <div className="flex items-center space-x-2">
+                  {(() => {
+                    const payments = reservationPayments?.[booking.id] || []
+                    const calculatedPaymentStatus = calculatePaymentStatus(booking, payments)
+                    
+                    // Log específico para debugging - solo para la primera reserva
+                    if (booking.id === bookings[0]?.id) {
+                      const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+                      const requiredAmount = calculateRequiredAmount(booking)
+                      console.log("🔍 Payment calculation for first booking:", {
+                        id: booking.id,
+                        total_amount: booking.total_amount,
+                        booking_source: booking.booking_source,
+                        channel_commission: booking.channel_commission,
+                        collection_commission: booking.collection_commission,
+                        payments_count: payments.length,
+                        payments_total: totalPayments,
+                        required_amount: requiredAmount,
+                        calculated_status: calculatedPaymentStatus,
+                        payments: payments.map(p => ({ id: p.id, amount: p.amount, status: p.status }))
+                      })
+                    }
+                    
+                    return (
+                      <Badge className={`${getPaymentStatusColor(calculatedPaymentStatus)} text-xs`}>
+                        <div className="flex items-center space-x-1">
+                          {getPaymentStatusIcon(calculatedPaymentStatus)}
+                          <span className="capitalize">{calculatedPaymentStatus}</span>
+                        </div>
+                      </Badge>
+                    )
+                  })()}
+                </div>
+                
                 <div className="flex items-center space-x-2">
                   <Button variant="outline" size="sm" onClick={() => handleEdit(booking)}>
                     <Edit className="h-4 w-4" />
@@ -718,13 +872,20 @@ function BookingDialog({
   guests,
   onClose,
   onSave,
+  reservationPayments,
+  calculateRequiredAmount,
+  calculatePaymentStatus,
 }: {
   booking: Booking | null
   properties: Property[]
   guests: Guest[]
   onClose: () => void
   onSave: () => void
+  reservationPayments?: {[key: string]: any[]}
+  calculateRequiredAmount: (booking: Booking) => number
+  calculatePaymentStatus: (booking: Booking, payments: any[]) => string
 }) {
+  const { selectedProperty } = useProperty()
   const [formData, setFormData] = useState({
     property_id: "",
     guest_name: "",
@@ -760,7 +921,7 @@ function BookingDialog({
   const [commissionPercentages, setCommissionPercentages] = useState<{
     sale: number | null;
     charge: number | null;
-  }>({ sale: null, charge: null })
+  }>({ sale: null, charge: null   })
 
   // Funciones para el estado del pago
   const getPaymentStatusColor = (status: string) => {
@@ -795,7 +956,7 @@ function BookingDialog({
 
   useEffect(() => {
     if (booking) {
-
+      // Editing existing booking - use property from booking
       const formDataToSet = {
         property_id: booking.property_id,
         guest_name: booking.guest ? `${booking.guest.first_name} ${booking.guest.last_name}`.trim() : "",
@@ -828,8 +989,10 @@ function BookingDialog({
       })
       setFormData(formDataToSet)
     } else {
+      // Creating new booking - use selected property from context
+      const propertyId = selectedProperty?.id || ""
       setFormData({
-        property_id: "",
+        property_id: propertyId,
         guest_name: "",
         guest_email: "",
         guest_phone: "",
@@ -855,7 +1018,7 @@ function BookingDialog({
         collection_commission: 0,
       })
     }
-  }, [booking])
+  }, [booking, selectedProperty])
 
   // Load available channels when property changes
   useEffect(() => {
@@ -933,15 +1096,7 @@ function BookingDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar que se haya seleccionado una propiedad (PRIMERO - orden de campos en pantalla)
-    if (!formData.property_id) {
-      setPropertyError("Completa este campo")
-      return
-    } else {
-      setPropertyError("")
-    }
-
-    // Validar fechas después de validar propiedad
+    // Validar fechas
     if (formData.check_in && formData.check_out) {
       const start = new Date(formData.check_in)
       const end = new Date(formData.check_out)
@@ -1425,39 +1580,14 @@ function BookingDialog({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="property_id" className="text-sm font-medium text-gray-700">Propiedad *</Label>
-                <Select
-                  value={formData.property_id}
-                  onValueChange={(value) => {
-                    setFormData({ ...formData, property_id: value })
-                    // Limpiar error cuando se selecciona una propiedad
-                    if (propertyError) setPropertyError("")
-                  }}
-                >
-                  <SelectTrigger className={`h-10 ${propertyError ? 'border-red-500' : ''}`}>
-                    <SelectValue placeholder="Selecciona una propiedad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Mostrar error de validación de propiedad */}
-                {propertyError && (
-                  <div className="relative">
-                    <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm z-10">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 bg-orange-500 rounded flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">!</span>
-                        </div>
-                        <span className="text-gray-700 text-sm">{propertyError}</span>
-                      </div>
-                      <div className="absolute top-0 left-4 transform -translate-y-1/2 w-2 h-2 bg-white border-l border-t border-gray-200 rotate-45"></div>
-                    </div>
-                  </div>
-                )}
+                <div className="h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center">
+                  <span className="text-gray-600 text-sm">
+                    {booking 
+                      ? properties.find(p => p.id === booking.property_id)?.name || "Propiedad no encontrada"
+                      : selectedProperty?.name || "No hay propiedad seleccionada"
+                    }
+                  </span>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -1778,12 +1908,59 @@ function BookingDialog({
                       )}
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Total (sin comisiones)</Label>
-                      <div className="text-2xl font-bold text-gray-900">
-                        €{((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                      </div>
-                    </div>
+                    {/* Sección de Total, Importe pagado y Importe pendiente */}
+                    {booking && (() => {
+                      const currentBooking = {
+                        ...booking,
+                        total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                        channel_commission: formData.channel_commission || 0,
+                        collection_commission: formData.collection_commission || 0,
+                        booking_source: formData.booking_source
+                      }
+                      
+                      const requiredAmount = calculateRequiredAmount(currentBooking)
+                      const paidAmount = reservationPayments?.[booking.id]?.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0) || 0
+                      const pendingAmount = Math.max(0, requiredAmount - paidAmount)
+                      const calculatedPaymentStatus = calculatePaymentStatus(currentBooking, reservationPayments?.[booking.id] || [])
+                      const totalAmount = (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)
+                      
+                      return (
+                        <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
+                          {/* Total */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Total</Label>
+                              <div className="text-xs text-gray-500">(Sin comisiones)</div>
+                            </div>
+                            <div className="text-xl font-bold text-gray-900 text-center">
+                              €{totalAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                          
+                          {/* Importe pagado */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                              <div className="text-xs text-gray-500">pagado</div>
+                            </div>
+                            <div className="text-xl font-bold text-green-600 text-center">
+                              €{paidAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                          
+                          {/* Importe pendiente */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                              <div className="text-xs text-gray-500">pendiente</div>
+                            </div>
+                            <div className="text-xl font-bold text-orange-600 text-center">
+                              €{pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
         </div>

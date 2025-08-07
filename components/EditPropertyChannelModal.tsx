@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { useProperty } from "@/hooks/useProperty"
 import { updatePropertyChannel } from "@/lib/channels"
 import type { PropertyChannelWithDetails, UpdatePropertyChannelData } from "@/types/channels"
-import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star } from "lucide-react"
+import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star, Building } from "lucide-react"
 
 interface EditPropertyChannelModalProps {
   isOpen: boolean
@@ -43,6 +44,7 @@ export default function EditPropertyChannelModal({
   })
 
   const { toast } = useToast()
+  const { selectedProperty } = useProperty()
 
   // Cargar datos del canal cuando se abre el modal
   useEffect(() => {
@@ -99,46 +101,55 @@ export default function EditPropertyChannelModal({
     onClose()
   }
 
-  if (!propertyChannel) return null
-
-  const channel = propertyChannel.channel
-
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            {channel?.logo && (
-              <img 
-                src={channel.logo} 
-                alt={channel.name}
-                className="w-6 h-6 object-contain"
-              />
-            )}
-            Editar {channel?.name}
-          </DialogTitle>
+          <DialogTitle>Editar Canal de Distribución</DialogTitle>
           <DialogDescription>
-            Modifica la configuración del canal para esta propiedad
+            Modifica la configuración del canal de distribución
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Info del canal */}
-          <div className="p-4 bg-gray-50 rounded-lg border">
-            <div className="flex items-center gap-3 mb-2">
-              {channel?.logo && (
-                <img 
-                  src={channel.logo} 
-                  alt={channel.name}
-                  className="w-8 h-8 object-contain"
-                />
-              )}
-              <span className="font-medium">{channel?.name}</span>
+          {/* Propiedad seleccionada en modo readonly */}
+          {selectedProperty && (
+            <div className="space-y-2">
+              <Label>Propiedad</Label>
+              <div className="p-3 bg-gray-50 rounded-md border">
+                <div className="flex items-center gap-2">
+                  <Building className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <div className="font-medium">{selectedProperty.name}</div>
+                    {selectedProperty.address && (
+                      <div className="text-sm text-gray-500">
+                        {selectedProperty.address}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-gray-600">
-              Configuración actual del canal para esta propiedad
-            </p>
-          </div>
+          )}
+
+          {/* Información del canal */}
+          {propertyChannel && (
+            <div className="space-y-2">
+              <Label>Canal</Label>
+              <div className="p-3 bg-gray-50 rounded-md border">
+                <div className="flex items-center gap-2">
+                  {propertyChannel.channel?.logo && (
+                    <img 
+                      src={propertyChannel.channel.logo} 
+                      alt={propertyChannel.channel.name}
+                      className="w-4 h-4 object-contain"
+                    />
+                  )}
+                  <span className="font-medium">{propertyChannel.channel?.name || 'Canal'}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Separator />
 
@@ -358,7 +369,7 @@ export default function EditPropertyChannelModal({
           </div>
 
           {/* Stats actuales */}
-          {(propertyChannel.property_rating > 0 || propertyChannel.property_review_count > 0) && (
+          {propertyChannel && (propertyChannel.property_rating > 0 || propertyChannel.property_review_count > 0) && (
             <div className="space-y-2">
               <h4 className="font-medium flex items-center gap-2">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -368,8 +379,8 @@ export default function EditPropertyChannelModal({
                 <div className="flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                   <span>
-                    Rating: {propertyChannel.property_rating > 0 ? propertyChannel.property_rating.toFixed(1) : "-"} 
-                    ({propertyChannel.property_review_count} reseñas)
+                    Rating: {propertyChannel.property_rating && propertyChannel.property_rating > 0 ? propertyChannel.property_rating.toFixed(1) : "-"} 
+                    ({propertyChannel.property_review_count || 0} reseñas)
                   </span>
                 </div>
                 {propertyChannel.last_rating_update && (

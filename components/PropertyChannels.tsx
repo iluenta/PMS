@@ -2,25 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Plus, Share2, Building2, Building } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { supabase, isDemoMode, mockData, type Property } from "@/lib/supabase"
-
-// Helper function to get property type display name
-const getPropertyTypeDisplayName = (type: string) => {
-  const typeMap: { [key: string]: string } = {
-    apartment: 'Apartamento',
-    house: 'Casa',
-    loft: 'Loft',
-    studio: 'Estudio',
-    villa: 'Villa',
-    chalet: 'Chalet'
-  }
-  return typeMap[type] || type || 'Apartamento'
-}
+import { useProperty } from "@/hooks/useProperty"
 import { getPropertyChannels, togglePropertyChannelStatus, deletePropertyChannel } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
 import PropertyChannelCard from "./PropertyChannelCard"
@@ -33,8 +19,6 @@ interface PropertyChannelsProps {
 }
 
 export default function PropertyChannels({ propertyId }: PropertyChannelsProps = {}) {
-  const [properties, setProperties] = useState<Property[]>([])
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(propertyId || "")
   const [propertyChannels, setPropertyChannels] = useState<PropertyChannelWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [channelsLoading, setChannelsLoading] = useState(false)
@@ -45,103 +29,25 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
   const [selectedChannel, setSelectedChannel] = useState<PropertyChannelWithDetails | null>(null)
   
   const { toast } = useToast()
+  const { selectedProperty } = useProperty()
 
   // Determinar si es modo embebido (dentro de una propiedad específica)
   const isEmbeddedMode = Boolean(propertyId)
 
-  // Cargar propiedades al iniciar (solo si no está en modo embebido)
-  useEffect(() => {
-    if (!isEmbeddedMode) {
-      loadProperties()
-    } else {
-      setLoading(false) // En modo embebido no necesitamos cargar propiedades
-    }
-  }, [isEmbeddedMode])
-
   // Cargar canales cuando cambia la propiedad seleccionada
   useEffect(() => {
-    if (selectedPropertyId) {
-      loadPropertyChannels(selectedPropertyId)
-    }
-  }, [selectedPropertyId])
-
-  // En modo embebido, cargar canales inmediatamente
-  useEffect(() => {
-    if (isEmbeddedMode && propertyId) {
-      loadPropertyChannels(propertyId)
-      loadSingleProperty(propertyId) // También cargar los datos de la propiedad
-    }
-  }, [isEmbeddedMode, propertyId])
-
-  const loadProperties = async () => {
-    try {
-      setLoading(true)
-      
-      if (isDemoMode) {
-        setProperties(mockData.properties)
-        // Auto-seleccionar la primera propiedad si existe
-        if (mockData.properties.length > 0 && !selectedPropertyId) {
-          setSelectedPropertyId(mockData.properties[0].id)
-        }
-        return
-      }
-
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      
-      const propertiesData = data || []
-      setProperties(propertiesData)
-      
-      // Auto-seleccionar la primera propiedad si existe
-      if (propertiesData.length > 0 && !selectedPropertyId) {
-        setSelectedPropertyId(propertiesData[0].id)
-      }
-    } catch (error) {
-      console.error("Error loading properties:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar las propiedades",
-        variant: "destructive",
-      })
-    } finally {
+    const currentPropertyId = isEmbeddedMode ? propertyId : selectedProperty?.id
+    if (currentPropertyId) {
+      loadPropertyChannels(currentPropertyId)
+    } else {
       setLoading(false)
     }
-  }
-
-  const loadSingleProperty = async (propertyId: string) => {
-    try {
-      if (isDemoMode) {
-        const property = mockData.properties.find(p => p.id === propertyId)
-        if (property) {
-          setProperties([property])
-        }
-        return
-      }
-
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .eq("id", propertyId)
-        .single()
-
-      if (error) throw error
-      
-      if (data) {
-        setProperties([data])
-      }
-    } catch (error) {
-      console.error("Error loading single property:", error)
-      // No mostrar toast aquí para evitar ruido, el componente padre ya maneja errores
-    }
-  }
+  }, [selectedProperty, propertyId, isEmbeddedMode])
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
       setChannelsLoading(true)
+      setLoading(true)
       const data = await getPropertyChannels(propertyId)
       setPropertyChannels(data)
     } catch (error) {
@@ -153,6 +59,7 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
       })
     } finally {
       setChannelsLoading(false)
+      setLoading(false)
     }
   }
 
@@ -167,8 +74,9 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
         description: `El canal se ha ${!currentStatus ? 'activado' : 'desactivado'} correctamente`,
       })
       // Recargar canales
-      if (selectedPropertyId) {
-        loadPropertyChannels(selectedPropertyId)
+      const currentPropertyId = isEmbeddedMode ? propertyId : selectedProperty?.id
+      if (currentPropertyId) {
+        loadPropertyChannels(currentPropertyId)
       }
     } catch (error) {
       console.error("Error toggling channel status:", error)
@@ -200,8 +108,9 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
         description: "El canal se ha eliminado correctamente",
       })
       // Recargar canales
-      if (selectedPropertyId) {
-        loadPropertyChannels(selectedPropertyId)
+      const currentPropertyId = isEmbeddedMode ? propertyId : selectedProperty?.id
+      if (currentPropertyId) {
+        loadPropertyChannels(currentPropertyId)
       }
     } catch (error) {
       console.error("Error deleting property channel:", error)
@@ -216,7 +125,7 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
   const handleAddChannel = () => {
     if (isEmbeddedMode) return // No permitir acciones en modo embebido
     
-    const currentPropertyId = isEmbeddedMode ? propertyId : selectedPropertyId
+    const currentPropertyId = isEmbeddedMode ? propertyId : selectedProperty?.id
     if (!currentPropertyId) {
       toast({
         title: "Error",
@@ -231,16 +140,16 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
   const handleModalSuccess = () => {
     if (isEmbeddedMode) return // No permitir acciones en modo embebido
     
-    const currentPropertyId = isEmbeddedMode ? propertyId : selectedPropertyId
+    const currentPropertyId = isEmbeddedMode ? propertyId : selectedProperty?.id
     if (currentPropertyId) {
       loadPropertyChannels(currentPropertyId)
     }
   }
 
-  // En modo embebido, necesitamos obtener la propiedad por su ID
-  const selectedProperty = isEmbeddedMode 
-    ? properties.find(p => p.id === propertyId) || null 
-    : properties.find(p => p.id === selectedPropertyId)
+  // Obtener la propiedad actual
+  const currentProperty = isEmbeddedMode 
+    ? null // En modo embebido no necesitamos mostrar la propiedad
+    : selectedProperty
 
   if (loading) {
     return (
@@ -268,99 +177,55 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Share2 className="h-5 w-5" />
-          {isEmbeddedMode ? "Canales de Distribución" : "Canales de Distribución"}
+          Canales de Distribución
         </CardTitle>
-                 <CardDescription>
-           {isEmbeddedMode 
-             ? "Vista de los canales de distribución configurados para esta propiedad"
-             : "Gestiona la configuración de canales por propiedad"
-           }
-         </CardDescription>
+        <CardDescription>
+          {isEmbeddedMode 
+            ? "Vista de los canales de distribución configurados para esta propiedad"
+            : "Gestiona la configuración de canales por propiedad"
+          }
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Property Selector */}
-        {!isEmbeddedMode && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Building className="h-5 w-5 mr-2" />
-                Seleccionar Propiedad
-              </CardTitle>
-              <CardDescription>
-                Elige una propiedad para gestionar sus canales de distribución
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="property-select">Propiedad</Label>
-                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-                  <SelectTrigger className="w-full md:w-80">
-                    <SelectValue placeholder="Selecciona una propiedad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedProperty && (
-                  <div className="text-sm text-gray-600 mt-2">
-                    <strong>Propiedad seleccionada:</strong> {selectedProperty.name}
-                    {selectedProperty.address && (
-                      <span className="block text-xs text-gray-500">
-                        {selectedProperty.address}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-
-
-                 {/* Sección de canales */}
-         {(selectedPropertyId || propertyId) ? (
-           <div className="space-y-4">
-             <div className="flex items-center justify-between">
-               <h3 className="text-lg font-semibold">
-                 Canales configurados ({propertyChannels.length})
-               </h3>
-               {/* Botón Añadir Canal solo en modo no embebido */}
-               {!isEmbeddedMode && (
-                 <Button size="sm" onClick={handleAddChannel}>
-                   <Plus className="h-4 w-4 mr-2" />
-                   Añadir Canal
-                 </Button>
-               )}
-             </div>
-            
+        {/* Sección de canales */}
+        {(currentProperty || propertyId) ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">
+                Canales configurados ({propertyChannels.length})
+              </h3>
+              {/* Botón Añadir Canal solo en modo no embebido */}
+              {!isEmbeddedMode && (
+                <Button size="sm" onClick={handleAddChannel}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Añadir Canal
+                </Button>
+              )}
+            </div>
+           
             {channelsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary" />
               </div>
-                         ) : propertyChannels.length > 0 ? (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 {propertyChannels.map((propertyChannel) => (
-                   isEmbeddedMode ? (
-                     <PropertyChannelCardReadOnly
-                       key={propertyChannel.id}
-                       propertyChannel={propertyChannel}
-                     />
-                   ) : (
-                     <PropertyChannelCard
-                       key={propertyChannel.id}
-                       propertyChannel={propertyChannel}
-                       onEdit={handleEdit}
-                       onDelete={handleDelete}
-                       onToggleStatus={handleToggleStatus}
-                     />
-                   )
-                 ))}
-               </div>
+            ) : propertyChannels.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {propertyChannels.map((propertyChannel) => (
+                  isEmbeddedMode ? (
+                    <PropertyChannelCardReadOnly
+                      key={propertyChannel.id}
+                      propertyChannel={propertyChannel}
+                    />
+                  ) : (
+                    <PropertyChannelCard
+                      key={propertyChannel.id}
+                      propertyChannel={propertyChannel}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onToggleStatus={handleToggleStatus}
+                    />
+                  )
+                ))}
+              </div>
             ) : (
               <div className="text-center py-12 text-gray-500">
                 <Share2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -378,27 +243,27 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
         )}
       </CardContent>
 
-             {/* Modales (solo en modo no embebido) */}
-       {!isEmbeddedMode && (selectedPropertyId || propertyId) && (
-         <AddPropertyChannelModal
-           isOpen={showAddModal}
-           onClose={() => setShowAddModal(false)}
-           propertyId={isEmbeddedMode ? propertyId! : selectedPropertyId}
-           onSuccess={handleModalSuccess}
-         />
-       )}
+      {/* Modales (solo en modo no embebido) */}
+      {!isEmbeddedMode && (currentProperty?.id || propertyId) && (
+        <AddPropertyChannelModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          propertyId={isEmbeddedMode ? propertyId! : currentProperty!.id}
+          onSuccess={handleModalSuccess}
+        />
+      )}
 
-       {!isEmbeddedMode && (
-         <EditPropertyChannelModal
-           isOpen={showEditModal}
-           onClose={() => {
-             setShowEditModal(false)
-             setSelectedChannel(null)
-           }}
-           propertyChannel={selectedChannel}
-           onSuccess={handleModalSuccess}
-         />
-       )}
+      {!isEmbeddedMode && (
+        <EditPropertyChannelModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false)
+            setSelectedChannel(null)
+          }}
+          propertyChannel={selectedChannel}
+          onSuccess={handleModalSuccess}
+        />
+      )}
     </Card>
   )
 } 
