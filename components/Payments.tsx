@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase, type Payment, type Property, type Reservation } from "@/lib/supabase"
+import { supabase, isDemoMode, mockData, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
 import { useProperty } from "@/hooks/useProperty"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
 
@@ -26,8 +26,62 @@ export default function Payments() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  // Filtros
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [channelFilter, setChannelFilter] = useState<string>("all")
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
+  const [sortFilter, setSortFilter] = useState<string>("date_desc")
 
   const { selectedProperty } = useProperty()
+  // Actualiza el campo reservations.payment_status basado en pagos "completed"
+  const updateReservationPaymentStatus = async (reservationId: string) => {
+    if (!reservationId) return
+    try {
+      // Obtener la reserva actual
+      const { data: reservation, error: reservationError } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("id", reservationId)
+        .single()
+
+      if (reservationError || !reservation) {
+        console.error("❌ Error fetching reservation for status update:", reservationError)
+        return
+      }
+
+      // Obtener pagos completados de la reserva
+      const { data: completedPayments, error: paymentsError } = await supabase
+        .from("payments")
+        .select("id, amount, status")
+        .eq("reservation_id", reservationId)
+        .eq("status", "completed")
+
+      if (paymentsError) {
+        console.error("❌ Error fetching payments for status update:", paymentsError)
+        return
+      }
+
+      // Calcular nuevo estado
+      const newStatus = calculatePaymentStatus(reservation as Reservation, completedPayments || [])
+
+      if (reservation.payment_status !== newStatus) {
+        const { error: updateError } = await supabase
+          .from("reservations")
+          .update({ payment_status: newStatus })
+          .eq("id", reservationId)
+
+        if (updateError) {
+          console.error("❌ Error updating reservation payment_status:", updateError)
+        } else {
+          // Refrescar listado de reservas para reflejar el nuevo estado
+          if (selectedProperty) await fetchReservations(selectedProperty.id)
+        }
+      }
+    } catch (error) {
+      console.error("💥 Exception updating reservation payment_status:", error)
+    }
+  }
 
   useEffect(() => {
     if (selectedProperty) {
@@ -115,9 +169,9 @@ export default function Payments() {
     }
   }
 
-  // Función para calcular el progreso de pago de una reserva
+  // Función para calcular el progreso de pago de una reserva (solo pagos completados)
   const getReservationPaymentProgress = (reservationId: string) => {
-    const reservationPayments = payments.filter(p => p.reservation_id === reservationId)
+    const reservationPayments = payments.filter(p => p.reservation_id === reservationId && p.status === 'completed')
     const totalPaid = reservationPayments.reduce((sum, p) => sum + p.amount, 0)
     const reservation = reservations.find(r => r.id === reservationId)
     const totalAmount = reservation?.total_amount || 0
@@ -131,6 +185,90 @@ export default function Payments() {
       return progress.percentage < 100
     })
   }
+
+  // Helpers para filtros
+  const getReservationById = (id: string | null | undefined) => reservations.find(r => r.id === id)
+  const getChannelNameForPayment = (payment: Payment) => {
+    const res = getReservationById(payment.reservation_id || undefined)
+    if (!res) return ""
+    const source = (res as any).external_source || "Direct"
+    // Normalizar
+    if (source === "Direct") return "Propio"
+    return source
+  }
+
+  const availableChannels = useMemo(() => {
+    const names = new Set<string>()
+    for (const p of payments) {
+      const name = getChannelNameForPayment(p)
+      if (name) names.add(name)
+    }
+    return Array.from(names)
+  }, [payments, reservations])
+
+  const filteredPayments = useMemo(() => {
+    let list = [...payments]
+
+    // Buscar por nombre del cliente, referencia o nombre del huésped de la reserva
+    if (searchTerm.trim()) {
+      const s = searchTerm.toLowerCase().trim()
+      list = list.filter(p => {
+        const customer = p.customer_name?.toLowerCase() || ""
+        const reference = p.reference?.toLowerCase() || ""
+        const guest = getReservationById(p.reservation_id || undefined)?.guest?.name?.toLowerCase() || ""
+        return customer.includes(s) || reference.includes(s) || guest.includes(s)
+      })
+    }
+
+    // Estado
+    if (statusFilter !== "all") list = list.filter(p => p.status === statusFilter)
+
+    // Canal
+    if (channelFilter !== "all") list = list.filter(p => getChannelNameForPayment(p) === channelFilter)
+
+    // Rango de fechas sobre la fecha del pago
+    if (dateRangeFilter !== "all") {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      list = list.filter(p => {
+        const d = p.date ? new Date(p.date) : null
+        if (!d) return false
+        const daysDiff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        switch (dateRangeFilter) {
+          case "pending": // usamos mismo nombre; aquí significa fecha futura
+            return d > today
+          case "today":
+            return daysDiff === 0
+          case "this_week":
+            return daysDiff >= 0 && daysDiff <= 7
+          case "this_month":
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          case "past":
+            return d < today
+          default:
+            return true
+        }
+      })
+    }
+
+    // Ordenar
+    list.sort((a, b) => {
+      switch (sortFilter) {
+        case "date_desc":
+          return new Date(b.date).getTime() - new Date(a.date).getTime()
+        case "date_asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        case "amount_desc":
+          return (b.amount || 0) - (a.amount || 0)
+        case "amount_asc":
+          return (a.amount || 0) - (b.amount || 0)
+        default:
+          return 0
+      }
+    })
+
+    return list
+  }, [payments, reservations, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -205,6 +343,9 @@ export default function Payments() {
 
       if (error) throw error
 
+      // Si el pago eliminado estaba asociado a una reserva, recalcular su estado
+      if (payment.reservation_id) await updateReservationPaymentStatus(payment.reservation_id)
+
       // Recargar los datos
       if (selectedProperty) {
         await fetchPayments(selectedProperty.id)
@@ -224,6 +365,92 @@ export default function Payments() {
         </div>
       </div>
 
+      {/* Filtros */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Buscar */}
+          <div className="space-y-2">
+            <Label htmlFor="search">Buscar</Label>
+            <Input
+              id="search"
+              placeholder="Nombre, referencia, huésped..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Estado */}
+          <div className="space-y-2">
+            <Label htmlFor="status">Estado</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="completed">Completados</SelectItem>
+                <SelectItem value="pending">Pendientes</SelectItem>
+                <SelectItem value="failed">Fallidos</SelectItem>
+                <SelectItem value="refunded">Reembolsados</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Canal */}
+          <div className="space-y-2">
+            <Label htmlFor="channel">Canal</Label>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los canales" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los canales</SelectItem>
+                {availableChannels.map((c: string) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Rango de fechas */}
+          <div className="space-y-2">
+            <Label htmlFor="dateRange">Rango de fechas</Label>
+            <Select value={dateRangeFilter} onValueChange={setDateRangeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pendientes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las fechas</SelectItem>
+                <SelectItem value="pending">Futuras</SelectItem>
+                <SelectItem value="today">Hoy</SelectItem>
+                <SelectItem value="this_week">Esta semana</SelectItem>
+                <SelectItem value="this_month">Este mes</SelectItem>
+                <SelectItem value="past">Pasadas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Ordenar */}
+          <div className="space-y-2">
+            <Label htmlFor="sort">Ordenar</Label>
+            <Select value={sortFilter} onValueChange={setSortFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Fecha (reciente)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date_desc">Fecha (reciente)</SelectItem>
+                <SelectItem value="date_asc">Fecha (antigua)</SelectItem>
+                <SelectItem value="amount_desc">Importe (mayor)</SelectItem>
+                <SelectItem value="amount_asc">Importe (menor)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </Card>
+
       {/* Lista de Pagos */}
       {selectedProperty ? (
         <div className="space-y-4">
@@ -241,6 +468,8 @@ export default function Payments() {
                 propertyId={selectedProperty.id}
                 reservations={reservations}
                 getReservationPaymentProgress={getReservationPaymentProgress}
+                  updateReservationPaymentStatus={updateReservationPaymentStatus}
+                payments={payments}
                 onClose={() => {
                   console.log("🚪 Closing dialog and clearing state")
                   setIsDialogOpen(false)
@@ -255,7 +484,7 @@ export default function Payments() {
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : payments.length === 0 ? (
+           ) : filteredPayments.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
                 <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -269,7 +498,7 @@ export default function Payments() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {payments.map((payment) => (
+              {filteredPayments.map((payment: Payment) => (
                 <Card key={payment.id} className="p-4">
                   <div className="flex flex-col space-y-4">
                     <div className="flex items-center justify-between">
@@ -356,6 +585,8 @@ function PaymentDialog({
   propertyId,
   reservations,
   getReservationPaymentProgress,
+  updateReservationPaymentStatus,
+  payments,
   onClose,
   onSave,
 }: {
@@ -363,6 +594,8 @@ function PaymentDialog({
   propertyId: string
   reservations: Reservation[]
   getReservationPaymentProgress: (reservationId: string) => { totalPaid: number; totalAmount: number; percentage: number }
+  updateReservationPaymentStatus: (reservationId: string) => Promise<void>
+  payments: Payment[]
   onClose: () => void
   onSave: () => void
 }) {
@@ -409,77 +642,34 @@ function PaymentDialog({
     })
   }
 
-  // Función para calcular el importe requerido según el canal
-  const calculateRequiredAmount = (reservation: Reservation): number => {
-    // Determinar el canal de la reserva
-    let channelName = 'Propio' // Default
-    
-    // Verificar si hay property_channel configurado
-    if (reservation.property_channel?.channel?.name) {
-      channelName = reservation.property_channel.channel.name
-    } else if (reservation.external_source) {
-      // Si no hay property_channel, usar external_source
-      channelName = reservation.external_source
-    }
-    
-    // Normalizar nombres de canal propio
-    const propioChannels = ['Propio', 'Direct', 'Direct Booking', 'Canal Directo', 'Directo']
-    const isPropioChannel = propioChannels.some(name => 
-      channelName.toLowerCase().includes(name.toLowerCase())
-    )
-    
-    // Siempre calcular el importe requerido restando las comisiones
-    const channelCommission = reservation.channel_commission || 0
-    const collectionCommission = reservation.collection_commission || 0
-    const totalCommissions = channelCommission + collectionCommission
-    
-    let result: number
-    
-    if (isPropioChannel && totalCommissions === 0) {
-      // Para canal propio sin comisiones: TOTAL (sin comisiones)
-      result = reservation.total_amount || 0
-    } else {
-      // Para canales con comisiones o canales propios con comisiones configuradas:
-      // TOTAL - (comisión venta + comisión cobro) - [(comisión venta + comisión cobro) * 21%]
-      // O lo que es lo mismo: TOTAL - (comisión venta + comisión cobro) * 1.21
-      const totalCommissionsWithIVA = totalCommissions * 1.21
-      result = (reservation.total_amount || 0) - totalCommissionsWithIVA
-    }
-    
-    // Redondear a 2 decimales como en el ejemplo: 479.29
-    const roundedResult = Math.round(result * 100) / 100
-    const finalResult = Math.max(0, roundedResult)
-    
-    console.log('calculateRequiredAmount:', {
-      reservationId: reservation.id,
-      channelName,
-      isPropioChannel,
-      total_amount: reservation.total_amount,
-      channel_commission: channelCommission,
-      collection_commission: collectionCommission,
-      totalCommissions,
-      totalCommissionsWithIVA: totalCommissions * 1.21,
-      result,
-      roundedResult,
-      finalResult,
-      // Agregar información adicional para debugging
-      raw_channel_commission: reservation.channel_commission,
-      raw_collection_commission: reservation.collection_commission
-    })
-    
-    return finalResult
-  }
-
   // Función para auto-rellenar el nombre del huésped cuando se selecciona una reserva
   const handleReservationChange = (reservationId: string) => {
     const selectedReservation = reservations.find(r => r.id === reservationId)
     console.log("🔍 Selected reservation:", selectedReservation)
     
-    setFormData({
-      ...formData,
-      reservation_id: reservationId,
-      customer_name: selectedReservation?.guest?.name || ""
-    })
+    if (selectedReservation) {
+      const amounts = calculateReservationAmounts(selectedReservation)
+      // Calcular pagos parciales completados existentes para esta reserva
+      const completedForReservation = payments
+        .filter((p) => p.reservation_id === reservationId && p.status === 'completed')
+      const totalCompletedPaid = completedForReservation
+        .reduce((sum, p) => sum + (p.amount || 0), 0)
+      const defaultAmount = Math.max(0, amounts.finalAmount - totalCompletedPaid)
+      setFormData({
+        ...formData,
+        reservation_id: reservationId,
+        customer_name: selectedReservation.guest?.name || "",
+        // Para nuevo pago, sugerir lo pendiente; si estamos editando, mantener importe
+        amount: payment ? formData.amount : defaultAmount
+      })
+    } else {
+      setFormData({
+        ...formData,
+        reservation_id: reservationId,
+        customer_name: "",
+        amount: formData.amount || 0
+      })
+    }
   }
 
   useEffect(() => {
@@ -580,12 +770,16 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           .eq("id", payment.id)
 
         if (error) throw error
+        // Actualizar estado de la reserva
+        if (paymentData.reservation_id) await updateReservationPaymentStatus(paymentData.reservation_id)
       } else {
         const { error } = await supabase
           .from("payments")
           .insert([paymentData])
 
         if (error) throw error
+        // Actualizar estado de la reserva
+        if (paymentData.reservation_id) await updateReservationPaymentStatus(paymentData.reservation_id)
       }
 
       onSave()
@@ -595,8 +789,19 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
     }
   }
 
+  // Obtener la reserva seleccionada para mostrar los importes
+  const selectedReservation = formData.reservation_id && formData.reservation_id !== "no_reservation" 
+    ? reservations.find(r => r.id === formData.reservation_id) 
+    : null
+
+  const reservationAmounts = selectedReservation ? calculateReservationAmounts(selectedReservation) : null
+  const partialsForSelected: Payment[] = selectedReservation 
+    ? (payments as Payment[]).filter((p: Payment) => p.reservation_id === selectedReservation.id && p.status === 'completed')
+    : []
+  const totalCompletedPaidForSelected = partialsForSelected.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{payment ? "Editar Pago" : "Nuevo Pago"}</DialogTitle>
         <DialogDescription>
@@ -637,8 +842,83 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               readOnly={formData.reservation_id !== "" && formData.reservation_id !== "no_reservation"}
             />
           </div>
+        </div>
+
+        {/* Sección específica de importes */}
+        {selectedReservation && reservationAmounts && (
+          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-900">Desglose de Importes</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Importe Total de la Reserva</Label>
+                <Input
+                  value={`€${reservationAmounts.totalAmount.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Comisión de Venta</Label>
+                <Input
+                  value={`€${reservationAmounts.channelCommission.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Comisión de Cobro</Label>
+                <Input
+                  value={`€${reservationAmounts.collectionCommission.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">IVA (21% de comisiones)</Label>
+                <Input
+                  value={`€${reservationAmounts.commissionIVA.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label className="text-sm font-medium text-gray-700">Pagos parciales realizados (completados)</Label>
+                <Input
+                  value={`€${totalCompletedPaidForSelected.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+            </div>
+            <div className="pt-2 border-t border-gray-200">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Importe Final (Calculado)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                    setFormData({ ...formData, amount: numValue })
+                  }}
+                  className="bg-white font-semibold"
+                  required
+                />
+                <p className="text-xs text-gray-500">
+                  Importe calculado: €{reservationAmounts.finalAmount.toFixed(2)} − Pagos parciales €{totalCompletedPaidForSelected.toFixed(2)} = €{Math.max(0, reservationAmounts.finalAmount - totalCompletedPaidForSelected).toFixed(2)} — Puedes modificar este valor
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Campo de importe editable solo si no hay reserva seleccionada */}
+        {(!selectedReservation || !reservationAmounts) && (
           <div className="space-y-2">
-            <Label htmlFor="amount">Importe (€)</Label>
+            <Label htmlFor="amount">Importe del Pago (€)</Label>
             <Input
               id="amount"
               type="number"
@@ -651,9 +931,10 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                 setFormData({ ...formData, amount: numValue })
               }}
               required
+              className="font-semibold"
             />
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -743,7 +1024,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           />
         </div>
 
-        <div className="flex justify-end space-x-2 pt-4">
+        <div className="flex justify-end space-x-2 pt-4 border-t">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancelar
           </Button>

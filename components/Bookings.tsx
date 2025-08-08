@@ -19,11 +19,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   supabase, 
+  isDemoMode, 
+  mockData, 
   type Booking, 
   type Property, 
   type Guest, 
-  calculateBookingFinancials,
-  isDemoMode
+  type Reservation,
+  calculateRequiredAmount,
+  calculatePaymentStatus
 } from "@/lib/supabase"
 import { getPropertyChannels } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
@@ -293,8 +296,8 @@ export default function Bookings() {
             .select("*")
             .eq("reservation_id", reservation.id)
           
-          // Filtrar solo los pagos válidos (no 'failed' ni 'refunded')
-          const validPayments = allPaymentsData?.filter(p => p.status !== 'failed' && p.status !== 'refunded') || []
+          // Usar solo pagos completados para el cálculo
+          const validPayments = allPaymentsData?.filter(p => p.status === 'completed') || []
           
           if (validPayments.length > 0) {
             paymentsMap[reservation.id] = validPayments
@@ -432,51 +435,63 @@ export default function Bookings() {
   const calculateNights = (checkIn: string, checkOut: string) => {
     const start = new Date(checkIn)
     const end = new Date(checkOut)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
   }
 
-  // Función para calcular el importe requerido según el canal
-  const calculateRequiredAmount = (booking: Booking): number => {
-    const channelName = booking.booking_source || 'Propio'
-    const totalAmount = booking.total_amount || 0
-    
-    if (channelName === 'Propio' || channelName === 'Direct') {
-      // Para canal propio: TOTAL (sin comisiones)
-      return totalAmount
-    } else {
-      // Para otros canales: TOTAL - [(comisión venta + comisión cobro) * 21%]
-      const channelCommission = booking.channel_commission || 0
-      const collectionCommission = booking.collection_commission || 0
-      const totalCommissions = channelCommission + collectionCommission
-      const commissionTax = totalCommissions * 0.21
-      const requiredAmount = totalAmount - commissionTax
-      
-      return Math.max(0, requiredAmount) // Asegurar que no sea negativo
+  // Función unificada para calcular el importe requerido y estado del pago
+  const calculatePaymentInfo = (booking: Booking, payments: any[] = []) => {
+    // Convertir Booking a Reservation para usar las funciones comunes
+    const reservation: Reservation = {
+      id: booking.id || '',
+      guest: booking.guest ? {
+        name: `${booking.guest.first_name} ${booking.guest.last_name}`,
+        email: booking.guest.email || '',
+        phone: booking.guest.phone || '',
+      } : {},
+      property_id: booking.property_id,
+      check_in: booking.check_in,
+      check_out: booking.check_out,
+      nights: calculateNights(booking.check_in, booking.check_out),
+      guests: booking.guests_count || 0,
+      adults: booking.guests_count || 0,
+      children: 0,
+      status: booking.status,
+      payment_status: booking.payment_status || 'pending',
+      total_amount: booking.total_amount || 0,
+      base_amount: booking.total_amount || 0,
+      cleaning_fee: 0,
+      taxes: 0,
+      channel: booking.booking_source,
+      notes: booking.notes || '',
+      special_requests: booking.special_requests || '',
+      external_id: (booking as any).external_id || '',
+      external_source: booking.booking_source || '',
+      ical_uid: '',
+      channel_commission: booking.channel_commission || 0,
+      collection_commission: booking.collection_commission || 0,
+      property_channel_id: '',
+      created_at: booking.created_at,
+      updated_at: booking.updated_at,
+      property: booking.property,
+      property_channel: undefined
     }
-  }
 
-  // Función para calcular el estado del pago basándose en los pagos reales
-  const calculatePaymentStatus = (booking: Booking, payments: any[]): string => {
-    const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
-    const requiredAmount = calculateRequiredAmount(booking)
+    // Calcular importe requerido y estado del pago usando las funciones centralizadas
+    const requiredAmount = calculateRequiredAmount(reservation)
+    const completedPayments = (payments || []).filter(p => p?.status === 'completed')
+    const totalPayments = completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+    const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
 
-    // Si no hay importe requerido, considerar como pagado
-    if (requiredAmount <= 0) {
-      return 'paid'
-    }
-    
-    // Si los pagos cubren o superan el importe requerido
-    if (totalPayments >= requiredAmount) {
-      return 'paid'
-    } 
-    // Si hay pagos pero no cubren el importe requerido
-    else if (totalPayments > 0) {
-      return 'partial'
-    } 
-    // Si no hay pagos
-    else {
-      return 'pending'
+    // Derivar el estado del pago usando exactamente los mismos valores mostrados
+    let paymentStatus = 'pending'
+    if (requiredAmount <= 0 || pendingAmount <= 0) paymentStatus = 'paid'
+    else if (totalPayments > 0) paymentStatus = 'partial'
+
+    return {
+      requiredAmount,
+      paymentStatus,
+      totalPayments,
+      pendingAmount: Math.max(0, pendingAmount)
     }
   }
 
@@ -509,8 +524,7 @@ export default function Bookings() {
             onClose={() => setIsDialogOpen(false)}
             onSave={fetchData}
             reservationPayments={reservationPayments}
-            calculateRequiredAmount={calculateRequiredAmount}
-            calculatePaymentStatus={calculatePaymentStatus}
+            calculatePaymentInfo={calculatePaymentInfo}
           />
         </Dialog>
       </div>
@@ -697,32 +711,17 @@ export default function Bookings() {
                 {/* Estado del Pago */}
                 <div className="flex items-center space-x-2">
                   {(() => {
-                    const payments = reservationPayments?.[booking.id] || []
-                    const calculatedPaymentStatus = calculatePaymentStatus(booking, payments)
-                    
-                    // Log específico para debugging - solo para la primera reserva
-                    if (booking.id === bookings[0]?.id) {
-                      const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
-                      const requiredAmount = calculateRequiredAmount(booking)
-                      console.log("🔍 Payment calculation for first booking:", {
-                        id: booking.id,
-                        total_amount: booking.total_amount,
-                        booking_source: booking.booking_source,
-                        channel_commission: booking.channel_commission,
-                        collection_commission: booking.collection_commission,
-                        payments_count: payments.length,
-                        payments_total: totalPayments,
-                        required_amount: requiredAmount,
-                        calculated_status: calculatedPaymentStatus,
-                        payments: payments.map(p => ({ id: p.id, amount: p.amount, status: p.status }))
-                      })
-                    }
-                    
+                    const paymentsForBooking = reservationPayments?.[booking.id]
+                    // Evitar parpadeo: si aún no cargamos pagos para esta reserva, mostramos el estado de BD
+                    const statusToShow = paymentsForBooking === undefined
+                      ? (booking.payment_status || 'pending')
+                      : calculatePaymentInfo(booking, paymentsForBooking).paymentStatus
+
                     return (
-                      <Badge className={`${getPaymentStatusColor(calculatedPaymentStatus)} text-xs`}>
+                      <Badge className={`${getPaymentStatusColor(statusToShow)} text-xs`}>
                         <div className="flex items-center space-x-1">
-                          {getPaymentStatusIcon(calculatedPaymentStatus)}
-                          <span className="capitalize">{calculatedPaymentStatus}</span>
+                          {getPaymentStatusIcon(statusToShow)}
+                          <span className="capitalize">{statusToShow}</span>
                         </div>
                       </Badge>
                     )
@@ -873,8 +872,7 @@ function BookingDialog({
   onClose,
   onSave,
   reservationPayments,
-  calculateRequiredAmount,
-  calculatePaymentStatus,
+  calculatePaymentInfo,
 }: {
   booking: Booking | null
   properties: Property[]
@@ -882,8 +880,12 @@ function BookingDialog({
   onClose: () => void
   onSave: () => void
   reservationPayments?: {[key: string]: any[]}
-  calculateRequiredAmount: (booking: Booking) => number
-  calculatePaymentStatus: (booking: Booking, payments: any[]) => string
+  calculatePaymentInfo: (booking: Booking, payments?: any[]) => { 
+    requiredAmount: number; 
+    paymentStatus: string; 
+    totalPayments: number; 
+    pendingAmount: number 
+  }
 }) {
   const { selectedProperty } = useProperty()
   const [formData, setFormData] = useState({
@@ -1729,23 +1731,40 @@ function BookingDialog({
               
               <div className="space-y-2">
                 <Label htmlFor="payment_status" className="text-sm font-medium text-gray-700">Estado de pago</Label>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    id="payment_status"
-                    value={formData.payment_status || "pending"}
-                    readOnly
-                    className="h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
-                    disabled
-                  />
-                  <Badge className={`${getPaymentStatusColor(formData.payment_status || "pending")} text-xs`}>
-                    <div className="flex items-center space-x-1">
-                      {getPaymentStatusIcon(formData.payment_status || "pending")}
-                      <span className="capitalize">{formData.payment_status || "pending"}</span>
+                {(() => {
+                  // Usar el mismo cálculo unificado que en la tarjeta para evitar desajustes
+                  const status = booking ? (() => {
+                    const currentBooking = {
+                      ...booking,
+                      total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                      channel_commission: formData.channel_commission || 0,
+                      collection_commission: formData.collection_commission || 0,
+                      booking_source: formData.booking_source
+                    }
+                    const payments = reservationPayments?.[booking.id] || []
+                    return calculatePaymentInfo(currentBooking, payments).paymentStatus
+                  })() : 'pending'
+
+                  return (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="payment_status"
+                        value={status}
+                        readOnly
+                        className="h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
+                        disabled
+                      />
+                      <Badge className={`${getPaymentStatusColor(status)} text-xs`}>
+                        <div className="flex items-center space-x-1">
+                          {getPaymentStatusIcon(status)}
+                          <span className="capitalize">{status}</span>
+                        </div>
+                      </Badge>
                     </div>
-                  </Badge>
-                </div>
+                  )
+                })()}
                 <div className="text-xs text-gray-500">
-                  El estado del pago se actualiza automáticamente según los pagos registrados
+                  El estado del pago se calcula con los mismos importes que se muestran a la derecha
                 </div>
               </div>
               
@@ -1918,11 +1937,7 @@ function BookingDialog({
                         booking_source: formData.booking_source
                       }
                       
-                      const requiredAmount = calculateRequiredAmount(currentBooking)
-                      const paidAmount = reservationPayments?.[booking.id]?.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0) || 0
-                      const pendingAmount = Math.max(0, requiredAmount - paidAmount)
-                      const calculatedPaymentStatus = calculatePaymentStatus(currentBooking, reservationPayments?.[booking.id] || [])
-                      const totalAmount = (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)
+                      const { requiredAmount, paymentStatus, totalPayments, pendingAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
                       
                       return (
                         <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
@@ -1933,7 +1948,7 @@ function BookingDialog({
                               <div className="text-xs text-gray-500">(Sin comisiones)</div>
                             </div>
                             <div className="text-xl font-bold text-gray-900 text-center">
-                              €{totalAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                              €{currentBooking.total_amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
                             </div>
                           </div>
                           
@@ -1944,7 +1959,7 @@ function BookingDialog({
                               <div className="text-xs text-gray-500">pagado</div>
                             </div>
                             <div className="text-xl font-bold text-green-600 text-center">
-                              €{paidAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                              €{totalPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
                             </div>
                           </div>
                           

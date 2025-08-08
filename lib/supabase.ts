@@ -948,9 +948,104 @@ export async function clearExpiredTokens() {
   }
 }
 
-// ============================================================================
-// Commission Calculation Functions
-// ============================================================================
+/**
+ * Calcula el importe requerido para una reserva basándose en el canal y las comisiones
+ * @param reservation - Objeto de reserva
+ * @returns Importe requerido calculado
+ */
+export function calculateRequiredAmount(reservation: Reservation): number {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+  
+  // Determinar el canal de la reserva
+  let channelName = 'Propio' // Default
+  
+  if (reservation.property_channel?.channel?.name) {
+    channelName = reservation.property_channel.channel.name
+  } else if (reservation.external_source) {
+    channelName = reservation.external_source
+  }
+  
+  // Normalizar nombres de canal propio
+  const propioChannels = ['Propio', 'Direct', 'Direct Booking', 'Canal Directo', 'Directo']
+  const isPropioChannel = propioChannels.some(name => 
+    channelName.toLowerCase().includes(name.toLowerCase())
+  )
+  
+  let result: number
+  
+  if (isPropioChannel && totalCommissions === 0) {
+    // Para canal propio sin comisiones: TOTAL (sin comisiones)
+    result = totalAmount
+  } else {
+    // Para canales con comisiones o canales propios con comisiones configuradas:
+    // TOTAL - (comisión venta + comisión cobro) * 1.21
+    const totalCommissionsWithIVA = totalCommissions * 1.21
+    result = totalAmount - totalCommissionsWithIVA
+  }
+  
+  // Redondear a 2 decimales y asegurar que no sea negativo
+  const roundedResult = Math.round(result * 100) / 100
+  return Math.max(0, roundedResult)
+}
+
+/**
+ * Calcula el estado del pago basándose en los pagos realizados y el importe requerido
+ * @param reservation - Objeto de reserva
+ * @param payments - Array de pagos realizados
+ * @returns Estado del pago: 'paid', 'partial', 'pending'
+ */
+export function calculatePaymentStatus(reservation: Reservation, payments: any[]): string {
+  const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const requiredAmount = calculateRequiredAmount(reservation)
+
+  // Calcular el importe pendiente con precisión de 2 decimales
+  const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
+
+  // Si no hay importe requerido, considerar como pagado
+  if (requiredAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si no hay importe pendiente o es exactamente 0, considerar como pagado
+  if (pendingAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si hay pagos pero no cubren el importe requerido
+  if (totalPayments > 0) {
+    return 'partial'
+  } 
+  // Si no hay pagos
+  else {
+    return 'pending'
+  }
+}
+
+/**
+ * Calcula el desglose completo de importes para una reserva
+ * @param reservation - Objeto de reserva
+ * @returns Objeto con todos los importes calculados
+ */
+export function calculateReservationAmounts(reservation: Reservation) {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+  const commissionIVA = totalCommissions * 0.21
+  const finalAmount = calculateRequiredAmount(reservation)
+
+  return {
+    totalAmount,
+    channelCommission,
+    collectionCommission,
+    totalCommissions,
+    commissionIVA,
+    finalAmount: Math.max(0, Math.round(finalAmount * 100) / 100)
+  }
+}
 
 /**
  * Get commission rates for a specific property and channel
@@ -1082,7 +1177,7 @@ export async function getPropertyChannels(propertyId: string) {
 
     // Transform the data to match expected format
     if (data && Array.isArray(data)) {
-      const channels = data.map((item) => ({
+      const channels = data.map((item: any) => ({
         id: item.distribution_channels?.id || "unknown",
         name: item.distribution_channels?.name || "Unknown",
       }))
