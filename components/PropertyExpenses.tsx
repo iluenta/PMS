@@ -23,8 +23,12 @@ import { Switch } from "@/components/ui/switch"
 import { supabase, isDemoMode, mockData, type Expense, type Property, type Reservation } from "@/lib/supabase"
 import { getExpenseCategories, getExpenseSubcategories } from "@/lib/expenses"
 import { type ExpenseCategory, type ExpenseSubcategory } from "@/types/expenses"
-import { Receipt, Plus, Edit, CheckCircle, Clock, AlertCircle, Building2, Trash2, Filter, Search } from "lucide-react"
+import { Receipt, Plus, Edit, CheckCircle, Clock, AlertCircle, Building2, Trash2, Filter, Search, UploadCloud, Download, FileText, Paperclip } from "lucide-react"
 import { useProperty } from "@/contexts/PropertyContext"
+import { useAuth } from "@/contexts/AuthContext"
+import { useToast } from "@/hooks/use-toast"
+import { listExpenseDocuments, uploadExpenseDocument, getSignedDocumentUrl, deleteExpenseDocument } from "@/lib/documents"
+import type { DocumentMeta } from "@/types/documents"
 
 export default function PropertyExpenses() {
   const { selectedProperty, properties } = useProperty()
@@ -1269,6 +1273,8 @@ function ExpenseDialog({
   onClose: () => void
   onSave: () => void
 }) {
+  const { user } = useAuth()
+  const { toast } = useToast()
   const { selectedProperty } = useProperty()
   
   // Inicializar formData sin dependencias dinámicas
@@ -1675,6 +1681,25 @@ function ExpenseDialog({
           </div>
         </Card>
 
+        {/* Documentos del gasto */}
+        <Card className="p-6 border-0 shadow-sm rounded-2xl">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-2 bg-gray-100 rounded-xl">
+              <Paperclip className="h-4 w-4 text-gray-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Documentos</h3>
+          </div>
+
+          {expense?.id ? (
+            <ExpenseDocumentsSection
+              expenseId={expense.id}
+              currentUserId={user?.id || null}
+            />
+          ) : (
+            <p className="text-sm text-gray-600">Guarda el gasto para poder adjuntar documentos.</p>
+          )}
+        </Card>
+
         {/* Información Financiera */}
         <Card className="p-6 border-0 shadow-sm rounded-2xl">
           <div className="flex items-center gap-2 mb-6">
@@ -1808,5 +1833,125 @@ function ExpenseDialog({
         </div>
       </form>
     </>
+  )
+}
+
+function ExpenseDocumentsSection({ expenseId, currentUserId }: { expenseId: string; currentUserId: string | null }) {
+  const { toast } = useToast()
+  const [documents, setDocuments] = useState<DocumentMeta[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [uploading, setUploading] = useState<boolean>(false)
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        setLoading(true)
+        const docs = await listExpenseDocuments(expenseId)
+        setDocuments(docs)
+      } catch (error) {
+        console.error("Error loading documents:", error)
+        toast({ title: "Error", description: "No se pudieron cargar los documentos", variant: "destructive" })
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [expenseId])
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setUploading(true)
+      await uploadExpenseDocument({
+        expenseId,
+        file,
+        originalName: file.name,
+        mimeType: file.type,
+        uploadedBy: currentUserId || undefined,
+      })
+      const docs = await listExpenseDocuments(expenseId)
+      setDocuments(docs)
+      toast({ title: "Documento subido", description: file.name })
+      e.target.value = ""
+    } catch (error) {
+      console.error("Error uploading document:", error)
+      toast({ title: "Error", description: "No se pudo subir el documento", variant: "destructive" })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleDownload(path: string) {
+    try {
+      const url = await getSignedDocumentUrl({ path })
+      window.open(url, "_blank")
+    } catch (error) {
+      console.error("Error getting signed url:", error)
+      toast({ title: "Error", description: "No se pudo descargar el documento", variant: "destructive" })
+    }
+  }
+
+  async function handleDelete(docId: string) {
+    const confirmed = confirm("¿Eliminar este documento?")
+    if (!confirmed) return
+    try {
+      await deleteExpenseDocument(docId)
+      setDocuments(prev => prev.filter(d => d.id !== docId))
+      toast({ title: "Documento eliminado" })
+    } catch (error) {
+      console.error("Error deleting document:", error)
+      toast({ title: "Error", description: "No se pudo eliminar el documento", variant: "destructive" })
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-gray-600">Adjunta justificantes en PDF o imagen (máx. 10MB)</p>
+        </div>
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="file"
+            accept="application/pdf,image/png,image/jpeg"
+            onChange={handleUpload}
+            disabled={uploading}
+            className="hidden"
+          />
+          <span className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${uploading ? "bg-gray-200 text-gray-500" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            <UploadCloud className="h-4 w-4" />
+            {uploading ? "Subiendo..." : "Subir documento"}
+          </span>
+        </label>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-600">Cargando documentos...</p>
+      ) : documents.length === 0 ? (
+        <p className="text-sm text-gray-600">No hay documentos adjuntos</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 rounded-md border border-gray-100">
+          {documents.map(doc => (
+            <li key={doc.id} className="flex items-center justify-between gap-3 px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-4 w-4 text-gray-500" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{doc.original_name}</p>
+                  <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => handleDownload(doc.storage_path)} className="rounded-xl">
+                  <Download className="h-3 w-3 mr-1" /> Descargar
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => handleDelete(doc.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
