@@ -546,6 +546,31 @@ export interface PropertyExpense {
   booking?: Booking
 }
 
+export interface Expense {
+  id: string
+  category?: string
+  subcategory?: string
+  description: string
+  amount: number
+  vendor?: string
+  date: string
+  status: string
+  payment_method?: string
+  reference?: string
+  notes?: string
+  receipt_url?: string
+  property_id?: string
+  is_recurring?: boolean
+  next_due_date?: string
+  created_at: string
+  updated_at: string
+  reservation_id?: string
+  category_id?: string
+  subcategory_id?: string
+  property?: Property
+  reservation?: Reservation
+}
+
 export interface TravelerGuideSection {
   id: string
   property_id: string
