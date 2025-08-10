@@ -809,10 +809,7 @@ export default function PropertyExpenses() {
                               <Clock className="h-4 w-4 text-yellow-600" />
                             </div>
                             <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 rounded-full">
-                              <div className="flex items-center space-x-1">
-                                <Clock className="h-3 w-3" />
-                                <span className="capitalize font-medium">Pendiente</span>
-                              </div>
+                              <span className="capitalize font-medium">Pendiente</span>
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -844,6 +841,7 @@ export default function PropertyExpenses() {
                       </CardHeader>
                       
                       <CardContent className="pt-0">
+                        {/* Información principal */}
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Importe</p>
@@ -870,6 +868,27 @@ export default function PropertyExpenses() {
                             </p>
                           </div>
                         </div>
+                        
+                        {/* Información adicional - CONSISTENTE CON LA PESTAÑA "TODOS" */}
+                        {(expense.reference || expense.reservation_id) && (
+                          <div className="pt-4 border-t border-gray-100 space-y-2">
+                            {expense.reference && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Referencia</span>
+                                <span className="text-xs font-medium text-gray-900">{expense.reference}</span>
+                              </div>
+                            )}
+                            
+                            {expense.reservation_id && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Reserva</span>
+                                <Badge variant="outline" className="text-xs rounded-full">
+                                  {getGuestNameForReservation(expense.reservation_id)}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -1001,10 +1020,7 @@ export default function PropertyExpenses() {
                               <CheckCircle className="h-4 w-4 text-green-600" />
                             </div>
                             <Badge className="bg-green-100 text-green-800 hover:bg-green-200 rounded-full">
-                              <div className="flex items-center space-x-1">
-                                <CheckCircle className="h-3 w-3" />
-                                <span className="capitalize font-medium">Pagado</span>
-                              </div>
+                              <span className="capitalize font-medium">Pagado</span>
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1062,6 +1078,27 @@ export default function PropertyExpenses() {
                             </p>
                           </div>
                         </div>
+                        
+                        {/* Información adicional - CONSISTENTE CON LA PESTAÑA "PENDIENTES" */}
+                        {(expense.reference || expense.reservation_id) && (
+                          <div className="pt-4 border-t border-gray-100 space-y-2">
+                            {expense.reference && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Referencia</span>
+                                <span className="text-xs font-medium text-gray-900">{expense.reference}</span>
+                              </div>
+                            )}
+                            
+                            {expense.reservation_id && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Reserva</span>
+                                <Badge variant="outline" className="text-xs rounded-full">
+                                  {getGuestNameForReservation(expense.reservation_id)}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -1193,10 +1230,7 @@ export default function PropertyExpenses() {
                               <CheckCircle className="h-4 w-4 text-blue-600" />
                             </div>
                             <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 rounded-full">
-                              <div className="flex items-center space-x-1">
-                                <CheckCircle className="h-3 w-3" />
-                                <span className="capitalize font-medium">Aprobado</span>
-                              </div>
+                              <span className="capitalize font-medium">Aprobado</span>
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1254,6 +1288,27 @@ export default function PropertyExpenses() {
                             </p>
                           </div>
                         </div>
+                        
+                        {/* Información adicional - CONSISTENTE CON LA PESTAÑA "PENDIENTES" */}
+                        {(expense.reference || expense.reservation_id) && (
+                          <div className="pt-4 border-t border-gray-100 space-y-2">
+                            {expense.reference && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Referencia</span>
+                                <span className="text-xs font-medium text-gray-900">{expense.reference}</span>
+                              </div>
+                            )}
+                            
+                            {expense.reservation_id && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-500">Reserva</span>
+                                <Badge variant="outline" className="text-xs rounded-full">
+                                  {getGuestNameForReservation(expense.reservation_id)}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}

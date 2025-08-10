@@ -3,14 +3,10 @@
 
 BEGIN;
 
--- Create bucket if not exists
-DO $$
-BEGIN
-  PERFORM 1 FROM storage.buckets WHERE id = 'expense-documents';
-  IF NOT FOUND THEN
-    PERFORM storage.create_bucket('expense-documents', false);
-  END IF;
-END $$;
+-- Create bucket if not exists (compatible with instances without storage.create_bucket())
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('expense-documents', 'expense-documents', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- Ensure RLS is enabled on storage.objects (usually enabled by default)
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
