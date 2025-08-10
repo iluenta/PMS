@@ -148,10 +148,10 @@ export default function PropertyExpenses() {
         console.error("Error fetching expenses:", expensesError)
       }
 
-      // Fetch reservations for the selected property
+      // Fetch reservations for the selected property with guest information
       const { data: reservationsData } = await supabase
         .from("reservations")
-        .select("*")
+        .select("*, guest:guest(name, email, phone)")
         .eq("property_id", selectedProperty.id)
 
       if (expensesData) {
@@ -254,6 +254,12 @@ export default function PropertyExpenses() {
   // Helpers para filtros
   const getPropertyNameForExpense = (expense: Expense) => {
     return selectedProperty?.name || "Sin propiedad"
+  }
+
+  const getGuestNameForReservation = (reservationId: string) => {
+    const reservation = reservations.find(r => r.id === reservationId)
+    if (!reservation || !reservation.guest) return "Sin huésped"
+    return reservation.guest.name || "Sin nombre"
   }
 
   const availableCategories = useMemo(() => {
@@ -637,7 +643,7 @@ export default function PropertyExpenses() {
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-medium text-gray-500">Reserva</span>
                               <Badge variant="outline" className="text-xs rounded-full">
-                                {expense.reservation_id}
+                                {getGuestNameForReservation(expense.reservation_id)}
                               </Badge>
                             </div>
                           )}
@@ -1875,7 +1881,12 @@ function ExpenseDocumentsSection({ expenseId, currentUserId }: { expenseId: stri
       e.target.value = ""
     } catch (error) {
       console.error("Error uploading document:", error)
-      toast({ title: "Error", description: "No se pudo subir el documento", variant: "destructive" })
+      const message =
+        (error instanceof Error && error.message) ||
+        (error as any)?.message ||
+        (error as any)?.error_description ||
+        "No se pudo subir el documento"
+      toast({ title: "Error", description: message, variant: "destructive" })
     } finally {
       setUploading(false)
     }
