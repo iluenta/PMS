@@ -149,10 +149,25 @@ export default function PropertyExpenses() {
       }
 
       // Fetch reservations for the selected property with guest information
-      const { data: reservationsData } = await supabase
+      // Intentamos primero con la consulta original
+      let { data: reservationsData, error: reservationsError } = await supabase
         .from("reservations")
-        .select("*, guest:guest(name, email, phone)")
+        .select("*")
         .eq("property_id", selectedProperty.id)
+
+      if (reservationsError) {
+        console.error("Error fetching reservations:", reservationsError)
+      }
+      
+      console.log("🏠 Reservas obtenidas para propiedad:", selectedProperty.id)
+      console.log("📊 Datos de reservas:", reservationsData)
+
+      if (reservationsError) {
+        console.error("Error fetching reservations:", reservationsError)
+      }
+      
+      console.log("🏠 Reservas obtenidas para propiedad:", selectedProperty.id)
+      console.log("📊 Datos de reservas:", reservationsData)
 
       if (expensesData) {
         setExpenses(expensesData)
@@ -257,8 +272,23 @@ export default function PropertyExpenses() {
   }
 
   const getGuestNameForReservation = (reservationId: string) => {
+    console.log("🔍 Buscando reserva:", reservationId)
+    console.log("📋 Reservas disponibles:", reservations)
+    
     const reservation = reservations.find(r => r.id === reservationId)
-    if (!reservation || !reservation.guest) return "Sin huésped"
+    console.log("🎯 Reserva encontrada:", reservation)
+    
+    if (!reservation) {
+      console.log("❌ No se encontró la reserva")
+      return "Sin huésped"
+    }
+    
+    if (!reservation.guest) {
+      console.log("❌ La reserva no tiene información de huésped")
+      return "Sin huésped"
+    }
+    
+    console.log("✅ Huésped encontrado:", reservation.guest)
     return reservation.guest.name || "Sin nombre"
   }
 
