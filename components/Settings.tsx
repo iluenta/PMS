@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { ProviderPicker } from '@/components/people/ProviderPicker'
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -51,6 +52,7 @@ export default function Settings() {
     name: "",
     logo: ""
   })
+  const [channelPerson, setChannelPerson] = useState<{ name: string; personId?: string }>({ name: "" })
 
   // Estados para categorías y subcategorías
   const [categories, setCategories] = useState<ExpenseCategory[]>([])
@@ -175,7 +177,13 @@ export default function Settings() {
           description: "El canal se ha actualizado correctamente"
         })
       } else {
-        await createChannel({ name: formData.name }, logoFile || undefined)
+        const created = await createChannel({ name: formData.name }, logoFile || undefined)
+        // Optionally link person to distribution_channels if provided
+        if (channelPerson.personId) {
+          try {
+            await fetch('/api/_link-channel-person', { method: 'POST', body: JSON.stringify({ channelId: created.id, personId: channelPerson.personId }) })
+          } catch {}
+        }
         toast({
           title: "Canal creado",
           description: "El canal se ha creado correctamente"
@@ -454,8 +462,8 @@ export default function Settings() {
                       }
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
+                   <form onSubmit={handleSubmit} className="space-y-4">
+                     <div className="space-y-2">
                       <Label htmlFor="name">Nombre del Canal</Label>
                       <Input
                         id="name"
@@ -465,6 +473,14 @@ export default function Settings() {
                         required
                       />
                     </div>
+
+                     <div className="space-y-2">
+                       <Label>Entidad (People) asociada</Label>
+                       <ProviderPicker
+                         value={{ name: channelPerson.name, personId: channelPerson.personId }}
+                         onChange={(v) => setChannelPerson({ name: v.name, personId: v.personId })}
+                       />
+                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="logo">Logo del Canal</Label>
