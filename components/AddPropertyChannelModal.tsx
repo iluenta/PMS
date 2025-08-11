@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ProviderPicker } from '@/components/people/ProviderPicker'
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -34,7 +33,6 @@ export default function AddPropertyChannelModal({
   const [loading, setLoading] = useState(false)
   const [channelsLoading, setChannelsLoading] = useState(false)
   const [selectedChannelId, setSelectedChannelId] = useState<string>("")
-  const [channelPerson, setChannelPerson] = useState<{ name: string; personId?: string }>({ name: "" })
   
   const [formData, setFormData] = useState<CreatePropertyChannelData>({
     property_id: propertyId,
@@ -102,7 +100,6 @@ export default function AddPropertyChannelModal({
         channel_id: selectedChannelId,
       }
 
-      // Si hay personId del picker, podríamos guardar el enlace en distribution_channels antes o después
       await createPropertyChannel(channelData)
       
       toast({
@@ -215,15 +212,7 @@ export default function AddPropertyChannelModal({
             )}
           </div>
 
-          {/* Persona del canal (People: distribution_channel) */}
-          <div className="space-y-2">
-            <Label>Entidad del canal (People)</Label>
-            <ProviderPicker
-              value={{ name: channelPerson.name, personId: channelPerson.personId }}
-              onChange={(v) => setChannelPerson({ name: v.name, personId: v.personId })}
-            />
-            <p className="text-xs text-gray-500">Se vinculará con People como tipo canal de distribución en la migración.</p>
-          </div>
+          {/* No hay entidad People en property_channels; la relación es con distribution_channels */}
 
           {/* Preview del canal seleccionado */}
           {selectedChannel && (
