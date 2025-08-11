@@ -1040,33 +1040,24 @@ function BookingDialog({
     }
 
     try {
-      // Vinculación con people: si hay persona seleccionada, actualizarla si el usuario modificó datos
-      let personId: string | null = null
+      // Vinculación con people: si ya hay person_id, ACTUALIZAR ese registro; si no, crear
+      let personId: string | null = (formData as any).person_id || null
       const picked = (formData as any)._picked_person as any | undefined
-      if (picked?.id) {
-        personId = picked.id as string
-        // Detectar cambios
-        const hasDelta = (
-          (formData.guest_email && formData.guest_email !== (picked.email || '')) ||
-          (formData.guest_phone && formData.guest_phone !== (picked.phone || '')) ||
-          (formData.guest_name && formData.guest_name.trim() !== `${picked.first_name ?? ''} ${picked.last_name ?? ''}`.trim()) ||
-          (formData.guest_country && formData.guest_country !== (picked.country || ''))
-        )
-        if (hasDelta) {
-          try {
-            const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
-            const peopleApi = await import('@/lib/peopleService')
-            const updated = await peopleApi.updatePerson(picked.id, {
-              first_name: first || undefined,
-              last_name: rest.join(' ') || undefined,
-              email: formData.guest_email || undefined,
-              phone: formData.guest_phone || undefined,
-              country: formData.guest_country || undefined,
-            } as any)
-            ;(formData as any)._picked_person = updated
-          } catch (e) {
-            console.warn('No se pudo actualizar el huésped seleccionado:', e)
-          }
+      if (personId) {
+        // Actualizar con los datos del formulario (idempotente si no hay cambios)
+        try {
+          const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
+          const peopleApi = await import('@/lib/peopleService')
+          const updated = await peopleApi.updatePerson(personId, {
+            first_name: first || undefined,
+            last_name: rest.join(' ') || undefined,
+            email: formData.guest_email || undefined,
+            phone: formData.guest_phone || undefined,
+            country: formData.guest_country || undefined,
+          } as any)
+          ;(formData as any)._picked_person = updated
+        } catch (e) {
+          console.warn('No se pudo actualizar el huésped seleccionado:', e)
         }
       } else if (formData.guest_name || formData.guest_email || formData.guest_phone) {
         // Crear persona mínima si no hay id
@@ -1511,6 +1502,9 @@ function BookingDialog({
                       }) as any)
                       if (picked) {
                         ;(formData as any)._picked_person = picked
+                      } else {
+                        // Si el usuario está tecleando y no selecciona, no mantengamos un picked anterior
+                        delete (formData as any)._picked_person
                       }
                     }}
                   />
