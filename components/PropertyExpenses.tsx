@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { ProviderPicker } from "@/components/people/ProviderPicker"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -1761,12 +1762,9 @@ function ExpenseDialog({
             {/* Proveedor */}
             <div className="space-y-2">
               <Label htmlFor="vendor" className="text-sm font-medium">Proveedor</Label>
-              <Input
-                id="vendor"
-                value={viewData.vendor}
-                onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                placeholder="Nombre del proveedor"
-                className="rounded-xl"
+              <ProviderPicker
+                value={{ name: viewData.vendor || "" }}
+                onChange={(v) => setFormData({ ...formData, vendor: v.name })}
               />
             </div>
           </div>
