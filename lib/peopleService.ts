@@ -1,6 +1,11 @@
 import { supabase } from '@/lib/supabase'
 import type { Person, PersonType, ListPeopleParams, CreatePersonInput, UpdatePersonInput } from '@/types/people'
 
+function mapError(error: any, fallback: string) {
+  const message = error?.message || error?.details || error?.hint || fallback
+  return new Error(message)
+}
+
 function ensureAuth() {
   // Supabase auth handled by RLS; here we can optionally check session if needed in client env
   return true
@@ -11,14 +16,14 @@ export async function listPeople(params?: ListPeopleParams): Promise<Person[]> {
   let query = supabase.from('people').select('*').order('updated_at', { ascending: false })
   if (params?.person_type) query = query.eq('person_type', params.person_type)
   const { data, error } = await query
-  if (error) throw error
+  if (error) throw mapError(error, 'Error al listar personas')
   return (data || []) as Person[]
 }
 
 export async function getPerson(id: string): Promise<Person | null> {
   ensureAuth()
   const { data, error } = await supabase.from('people').select('*').eq('id', id).single()
-  if (error) throw error
+  if (error) throw mapError(error, 'Error al obtener la persona')
   return (data as Person) || null
 }
 
@@ -29,7 +34,7 @@ export async function createPerson(input: CreatePersonInput): Promise<Person> {
     throw new Error('Nombre o empresa es obligatorio')
   }
   const { data, error } = await supabase.from('people').insert([input]).select('*').single()
-  if (error) throw error
+  if (error) throw mapError(error, 'Error al crear la persona')
   return data as Person
 }
 
@@ -41,14 +46,14 @@ export async function updatePerson(id: string, dataToUpdate: UpdatePersonInput):
     .eq('id', id)
     .select('*')
     .single()
-  if (error) throw error
+  if (error) throw mapError(error, 'Error al actualizar la persona')
   return data as Person
 }
 
 export async function deletePerson(id: string): Promise<void> {
   ensureAuth()
   const { error } = await supabase.from('people').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw mapError(error, 'Error al eliminar la persona')
 }
 
 

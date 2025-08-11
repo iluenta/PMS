@@ -693,159 +693,82 @@ export default function Bookings() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBookings.map((booking) => (
-          <Card key={booking.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <Badge className={`${getStatusColor(booking.status)} text-xs`}>
-                    <div className="flex items-center space-x-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredBookings.map((booking) => {
+          const paymentsForBooking = reservationPayments?.[booking.id]
+          const paymentStatusToShow = paymentsForBooking === undefined
+            ? (booking.payment_status || 'pending')
+            : calculatePaymentInfo(booking, paymentsForBooking).paymentStatus
+          return (
+            <Card key={booking.id} className="p-4 hover:shadow-md transition-shadow">
+              <div className="flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-6 w-6 text-blue-600" />
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">
+                        {booking.guest?.first_name} {booking.guest?.last_name}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        {new Date(booking.check_in).toLocaleDateString()} – {new Date(booking.check_out).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className={`${getStatusColor(booking.status)} rounded-full`}>
+                    <span className="inline-flex items-center gap-1">
                       {getStatusIcon(booking.status)}
                       <span className="capitalize">{booking.status}</span>
-                    </div>
+                    </span>
                   </Badge>
                 </div>
-                
-                {/* Estado del Pago */}
-                <div className="flex items-center space-x-2">
-                  {(() => {
-                    const paymentsForBooking = reservationPayments?.[booking.id]
-                    // Evitar parpadeo: si aún no cargamos pagos para esta reserva, mostramos el estado de BD
-                    const statusToShow = paymentsForBooking === undefined
-                      ? (booking.payment_status || 'pending')
-                      : calculatePaymentInfo(booking, paymentsForBooking).paymentStatus
 
-                    return (
-                      <Badge className={`${getPaymentStatusColor(statusToShow)} text-xs`}>
-                        <div className="flex items-center space-x-1">
-                          {getPaymentStatusIcon(statusToShow)}
-                          <span className="capitalize">{statusToShow}</span>
-                        </div>
-                      </Badge>
-                    )
-                  })()}
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(booking)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(booking.id!)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h3 className="font-semibold text-lg text-gray-900">
-                    {booking.guest?.first_name} {booking.guest?.last_name}
-                  </h3>
-                  <div className="flex items-center text-sm text-gray-600 mt-1">
-                    <Building2 className="h-4 w-4 mr-1" />
-                    <span>{booking.property?.name}</span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    <p>{booking.booking_source}</p>
-                    {(booking as any).external_id && (
-                      <p className="text-xs text-blue-600">ID: {(booking as any).external_id}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-700">Check-in</p>
-                    <p className="text-gray-600">
-                      {new Date(booking.check_in).toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                <div className="flex items-center justify-between">
+                  <div className="text-left">
+                    <p className="text-lg font-semibold text-gray-900">
+                      €{(booking.total_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {booking.property?.name || ''}{booking.booking_source ? ` • ${booking.booking_source}` : ''}
                     </p>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-700">Check-out</p>
-                    <p className="text-gray-600">
-                      {new Date(booking.check_out).toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-sm">
-                  <p className="font-medium text-gray-700">Duración</p>
-                  <p className="text-gray-600">{calculateNights(booking.check_in, booking.check_out)} noches</p>
-                </div>
-
-                <div className="border-t pt-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Total</span>
-                    <span className="text-lg font-semibold text-green-600">
-                      €{(booking.total_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                  <Badge className={`${getPaymentStatusColor(paymentStatusToShow)} rounded-full`}>
+                    <span className="inline-flex items-center gap-1">
+                      {getPaymentStatusIcon(paymentStatusToShow)}
+                      <span className="capitalize">{paymentStatusToShow}</span>
                     </span>
-                  </div>
-                  
-                  {(booking.commission_amount || booking.channel_commission || booking.collection_commission || booking.net_amount) && (
-                    <div className="mt-2 space-y-1 text-sm">
-                      {booking.commission_amount && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Comisión</span>
-                          <span className="text-orange-600">
-                            €{(booking.commission_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })} 
-                            {booking.commission_rate && ` (${booking.commission_rate}%)`}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Venta</span>
-                        <span className="text-orange-600">€{(booking.channel_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Cobro</span>
-                        <span className="text-red-600">€{(booking.collection_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
-                      {booking.net_amount && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Neto</span>
-                          <span className="text-green-600">€{(booking.net_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  </Badge>
                 </div>
 
-                {/* Solicitudes Especiales y Notas */}
-                {(booking.special_requests || booking.notes) && (
-                  <div className="border-t pt-3 space-y-2">
-                    {booking.special_requests && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-700">Solicitudes Especiales</p>
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.special_requests}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {booking.notes && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-700">Notas</p>
-                        <div className="p-2 bg-gray-50 border border-gray-200 rounded-md">
-                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.notes}</p>
-                        </div>
-                      </div>
-                    )}
+                {(booking.special_requests || (booking as any).notes) && (
+                  <div className="p-2 bg-gray-50 rounded">
+                    <p className="text-xs text-gray-600 line-clamp-3">
+                      {booking.special_requests || (booking as any).notes}
+                    </p>
                   </div>
                 )}
+
+                <div className="flex justify-end space-x-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(booking)}
+                    className="h-8 px-2"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(booking.id!)}
+                    className="h-8 px-2"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
       </div>
 
       {filteredBookings.length === 0 && (

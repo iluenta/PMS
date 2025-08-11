@@ -16,6 +16,11 @@ interface Props {
 }
 
 export default function PersonForm({ person, onClose, onSaved }: Props) {
+  const normalizeType = (t: string | undefined): PersonType => {
+    const v = (t || '').toLowerCase()
+    if (v === 'guest' || v === 'provider' || v === 'distribution_channel' || v === 'other') return v as PersonType
+    return 'other'
+  }
   const [formData, setFormData] = useState<CreatePersonInput>({
     person_type: 'guest',
     first_name: '',
@@ -37,20 +42,29 @@ export default function PersonForm({ person, onClose, onSaved }: Props) {
   useEffect(() => {
     if (person) {
       const { id: _id, created_at: _c, updated_at: _u, ...rest } = person
-      setFormData({ person_type: person.person_type, ...(rest as UpdatePersonInput) })
+      const person_type = normalizeType((person as any).person_type as string)
+      // Asegurar que el tipo normalizado prevalece
+      setFormData({ ...(rest as UpdatePersonInput), person_type })
     }
   }, [person])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.company_name && !formData.first_name) return
-    if (isEditing && person) {
-      await updatePerson(person.id, formData)
-    } else {
-      await createPerson(formData)
+    if (!formData.company_name && !formData.first_name) {
+      alert('Nombre o empresa es obligatorio')
+      return
     }
-    onSaved()
-    onClose()
+    try {
+      if (isEditing && person) {
+        await updatePerson(person.id, formData)
+      } else {
+        await createPerson(formData)
+      }
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      alert(err?.message || 'No se pudo guardar')
+    }
   }
 
   return (
@@ -58,9 +72,13 @@ export default function PersonForm({ person, onClose, onSaved }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>Tipo</Label>
-          <Select value={formData.person_type} onValueChange={(v) => setFormData(prev => ({ ...prev, person_type: v as PersonType }))}>
+          <Select
+            key={`person-type-${formData.person_type ?? 'none'}`}
+            value={formData.person_type ?? undefined}
+            onValueChange={(v) => setFormData(prev => ({ ...prev, person_type: v as PersonType }))}
+          >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Selecciona un tipo" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="guest">Huésped</SelectItem>
