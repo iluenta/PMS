@@ -123,7 +123,7 @@ export function GuestPicker({ value, onChange }: Props) {
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading="Acciones">
-              <CommandItem onSelect={createFromTyped}>Crear nueva persona con los datos escritos</CommandItem>
+              <CommandItem onSelect={createFromTyped} onMouseDown={(e) => e.preventDefault()}>Crear nueva persona con los datos escritos</CommandItem>
             </CommandGroup>
           </CommandList>
         </Command>

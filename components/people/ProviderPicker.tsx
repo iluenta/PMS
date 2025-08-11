@@ -26,7 +26,7 @@ export function ProviderPicker({ value, onChange }: Props) {
   }
 
   function createFromTyped() {
-    const typed = (value.name || query).trim()
+    const typed = (query.trim() || value.name).trim()
     if (!typed) { closePopover(); return }
     onChange({ ...value, name: typed, personId: undefined })
     closePopover()
@@ -60,6 +60,14 @@ export function ProviderPicker({ value, onChange }: Props) {
             if (e.key === 'Enter') {
               const hasResults = results.length > 0
               if (!hasResults) { e.preventDefault(); createFromTyped() }
+              else {
+                // If there is a highlighted item, Command will handle it.
+                // If not, but user pressed Enter, fallback to create from typed
+                // to avoid being "stuck" with no action.
+                setTimeout(() => {
+                  if (open) return
+                }, 0)
+              }
             }
             if (e.key === 'ArrowDown') {
               if (!open) setOpen(true)
@@ -99,9 +107,10 @@ export function ProviderPicker({ value, onChange }: Props) {
                 <button
                   type="button"
                   className="text-blue-600 hover:underline"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={createFromTyped}
                 >
-                  Pulsar Enter para crear proveedor con lo escrito
+                  Crear nuevo proveedor con lo escrito
                 </button>
               </div>
             </CommandEmpty>
@@ -120,7 +129,12 @@ export function ProviderPicker({ value, onChange }: Props) {
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading="Acciones">
-              <CommandItem onSelect={createFromTyped}>Crear nuevo proveedor con los datos escritos</CommandItem>
+              <CommandItem
+                onSelect={createFromTyped}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                Crear nuevo proveedor con los datos escritos
+              </CommandItem>
             </CommandGroup>
           </CommandList>
         </Command>
