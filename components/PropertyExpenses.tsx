@@ -1380,6 +1380,7 @@ function ExpenseDialog({
     date: new Date().toISOString().split("T")[0],
     payment_method: "transfer",
     vendor: "",
+    vendor_id: "",
     reference: "",
     notes: "",
     status: "pending",
@@ -1523,6 +1524,7 @@ function ExpenseDialog({
         date: expense.date || new Date().toISOString().split("T")[0],
         payment_method: expense.payment_method || "transfer",
         vendor: expense.vendor || "",
+        vendor_id: (expense as any)?.vendor_id || "",
         reference: expense.reference || "",
         notes: expense.notes || "",
         status: expense.status || "pending",
@@ -1541,6 +1543,7 @@ function ExpenseDialog({
         date: new Date().toISOString().split("T")[0],
         payment_method: "transfer",
         vendor: "",
+        vendor_id: "",
         reference: "",
         notes: "",
         status: "pending",
@@ -1574,6 +1577,7 @@ function ExpenseDialog({
         status: formData.status,
         payment_method: formData.payment_method,
         vendor: formData.vendor || null,
+        vendor_id: formData.vendor_id || null,
         reference: formData.reference || null,
         notes: formData.notes || null,
       }
@@ -1763,8 +1767,8 @@ function ExpenseDialog({
             <div className="space-y-2">
               <Label htmlFor="vendor" className="text-sm font-medium">Proveedor</Label>
               <ProviderPicker
-                value={{ name: viewData.vendor || "" }}
-                onChange={(v) => setFormData({ ...formData, vendor: v.name })}
+                value={{ name: viewData.vendor || "", personId: (formData as any).vendor_id || undefined }}
+                onChange={(v) => setFormData({ ...formData, vendor: v.name, vendor_id: v.personId || "" })}
               />
             </div>
           </div>

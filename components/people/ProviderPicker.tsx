@@ -9,8 +9,8 @@ import { searchPeople } from '@/lib/peopleService'
 import type { Person } from '@/types/people'
 
 interface Props {
-  value: { name: string; email?: string; phone?: string }
-  onChange: (val: { name: string; email?: string; phone?: string }, picked?: Person) => void
+  value: { name: string; email?: string; phone?: string; personId?: string }
+  onChange: (val: { name: string; email?: string; phone?: string; personId?: string }, picked?: Person) => void
 }
 
 export function ProviderPicker({ value, onChange }: Props) {
@@ -28,7 +28,7 @@ export function ProviderPicker({ value, onChange }: Props) {
   function createFromTyped() {
     const typed = (value.name || query).trim()
     if (!typed) { closePopover(); return }
-    onChange({ ...value, name: typed })
+    onChange({ ...value, name: typed, personId: undefined })
     closePopover()
   }
 
@@ -107,7 +107,7 @@ export function ProviderPicker({ value, onChange }: Props) {
             </CommandEmpty>
             <CommandGroup heading="Proveedores">
               {results.map((p) => (
-                <CommandItem key={p.id} value={p.id} onSelect={() => { closePopover(); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.company_name || 'Sin nombre', email: p.email ?? '', phone: p.phone ?? '' }, p) }}>
+                <CommandItem key={p.id} value={p.id} onSelect={() => { closePopover(); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.company_name || 'Sin nombre', email: p.email ?? '', phone: p.phone ?? '', personId: p.id }, p) }}>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex flex-col">
                       <span className="font-medium">{`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.company_name || 'Sin nombre'}</span>
