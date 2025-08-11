@@ -14,9 +14,9 @@ WITH candidates AS (
 )
 INSERT INTO public.people (person_type, first_name, last_name, email, phone, country, fiscal_id, fiscal_id_type)
 SELECT 'guest',
-       NULLIF(split_part(full_name, ' ', 1), ''),
-       NULLIF(NULLIF(REGEXP_REPLACE(full_name, '^[^ ]+\\s?', ''), ''), NULL),
-       email, phone, country, fiscal_id, fiscal_id_type
+       NULLIF(split_part(c.full_name, ' ', 1), ''),
+       NULLIF(NULLIF(REGEXP_REPLACE(c.full_name, '^[^ ]+\\s?', ''), ''), NULL),
+       c.email, c.phone, c.country, c.fiscal_id, c.fiscal_id_type
 FROM candidates c
 LEFT JOIN public.people p
   ON (p.email IS NOT NULL AND p.email = c.email)
