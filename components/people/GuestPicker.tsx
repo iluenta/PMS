@@ -9,8 +9,8 @@ import { searchPeople } from '@/lib/peopleService'
 import type { Person } from '@/types/people'
 
 interface Props {
-  value: { name: string; email?: string; phone?: string }
-  onChange: (val: { name: string; email?: string; phone?: string }, picked?: Person) => void
+  value: { name: string; email?: string; phone?: string; personId?: string }
+  onChange: (val: { name: string; email?: string; phone?: string; personId?: string }, picked?: Person) => void
 }
 
 export function GuestPicker({ value, onChange }: Props) {
@@ -52,7 +52,7 @@ export function GuestPicker({ value, onChange }: Props) {
           value={value.name}
           placeholder="Nombre completo"
           onChange={(e) => {
-            onChange({ ...value, name: e.target.value })
+            onChange({ ...value, name: e.target.value, personId: value.personId })
             setQuery(e.target.value)
             if (!open) setOpen(true)
           }}
@@ -110,7 +110,7 @@ export function GuestPicker({ value, onChange }: Props) {
             </CommandEmpty>
             <CommandGroup heading="Coincidencias">
               {results.map((p) => (
-                <CommandItem key={p.id} value={p.id} onSelect={() => { closePopover(); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(), email: p.email ?? '', phone: p.phone ?? '' }, p) }}>
+                <CommandItem key={p.id} value={p.id} onSelect={() => { closePopover(); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(), email: p.email ?? '', phone: p.phone ?? '', personId: p.id }, p) }}>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex flex-col">
                       <span className="font-medium">{`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.company_name || 'Sin nombre'}</span>

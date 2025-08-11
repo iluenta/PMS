@@ -1040,12 +1040,35 @@ function BookingDialog({
     }
 
     try {
-      // Vinculación con people: si hay persona seleccionada por el picker, usar su id; si no existe, crearla
+      // Vinculación con people: si hay persona seleccionada, actualizarla si el usuario modificó datos
       let personId: string | null = null
       const picked = (formData as any)._picked_person as any | undefined
       if (picked?.id) {
         personId = picked.id as string
-      } else if (!picked && (formData.guest_name || formData.guest_email || formData.guest_phone)) {
+        // Detectar cambios
+        const hasDelta = (
+          (formData.guest_email && formData.guest_email !== (picked.email || '')) ||
+          (formData.guest_phone && formData.guest_phone !== (picked.phone || '')) ||
+          (formData.guest_name && formData.guest_name.trim() !== `${picked.first_name ?? ''} ${picked.last_name ?? ''}`.trim()) ||
+          (formData.guest_country && formData.guest_country !== (picked.country || ''))
+        )
+        if (hasDelta) {
+          try {
+            const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
+            const peopleApi = await import('@/lib/peopleService')
+            const updated = await peopleApi.updatePerson(picked.id, {
+              first_name: first || undefined,
+              last_name: rest.join(' ') || undefined,
+              email: formData.guest_email || undefined,
+              phone: formData.guest_phone || undefined,
+              country: formData.guest_country || undefined,
+            } as any)
+            ;(formData as any)._picked_person = updated
+          } catch (e) {
+            console.warn('No se pudo actualizar el huésped seleccionado:', e)
+          }
+        }
+      } else if (formData.guest_name || formData.guest_email || formData.guest_phone) {
         // Crear persona mínima si no hay id
         try {
           const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
@@ -1477,20 +1500,17 @@ function BookingDialog({
                   <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
                   {/* GuestPicker: autocompletar desde people */}
                   <GuestPicker
-                    value={{ name: formData.guest_name, email: formData.guest_email || '', phone: formData.guest_phone || '' }}
+                    value={{ name: formData.guest_name, email: formData.guest_email || '', phone: formData.guest_phone || '', personId: (formData as any).person_id || (formData as any)._picked_person?.id }}
                     onChange={(val, picked) => {
                       setFormData(prev => ({
                         ...prev,
                         guest_name: val.name,
                         guest_email: val.email || '',
                         guest_phone: val.phone || '',
-                        // guardaremos person_id en submit; almacenamos temporalmente en notes para no romper tipos
-                      }))
+                        person_id: val.personId || (prev as any).person_id,
+                      }) as any)
                       if (picked) {
-                        // Usamos propiedad temporal en objeto para reusar en submit (evitar ampliar formData tipos ahora)
                         ;(formData as any)._picked_person = picked
-                      } else {
-                        delete (formData as any)._picked_person
                       }
                     }}
                   />
