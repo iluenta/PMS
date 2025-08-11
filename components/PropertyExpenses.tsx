@@ -1599,6 +1599,25 @@ function ExpenseDialog({
 
       // submitting data
 
+      // Si tenemos un proveedor tipeado sin personId, opcionalmente podemos crear la persona proveedor mínima
+      const pickedProvider: any = (formData as any)._picked_provider
+      if (!formData.vendor_id && pickedProvider?.shouldCreate && formData.vendor?.trim()) {
+        try {
+          const [first, ...rest] = formData.vendor.trim().split(' ')
+          const peopleApi = await import('@/lib/peopleService')
+          const created = await peopleApi.createPerson({
+            person_type: 'provider',
+            first_name: first || undefined,
+            last_name: rest.join(' ') || undefined,
+            company_name: formData.vendor.trim(),
+          } as any)
+          submitData.vendor_id = created.id
+          ;(submitData as any).vendor = created.company_name || `${created.first_name ?? ''} ${created.last_name ?? ''}`.trim()
+        } catch (e) {
+          console.warn('No se pudo crear el proveedor automáticamente:', e)
+        }
+      }
+
       if (expense) {
         const { error } = await supabase.from("expenses").update(submitData).eq("id", expense.id)
 
@@ -1768,7 +1787,15 @@ function ExpenseDialog({
               <Label htmlFor="vendor" className="text-sm font-medium">Proveedor</Label>
               <ProviderPicker
                 value={{ name: viewData.vendor || "", personId: (formData as any).vendor_id || undefined }}
-                onChange={(v) => setFormData({ ...formData, vendor: v.name, vendor_id: v.personId || "" })}
+                onChange={(v) => setFormData(prev => ({
+                  ...prev,
+                  vendor: v.name,
+                  vendor_id: v.personId || "",
+                  // metadata para saber si debemos crear proveedor
+                  ...(v.personId
+                    ? { _picked_provider: { id: v.personId } }
+                    : { _picked_provider: { name: v.name, shouldCreate: true } })
+                } as any))}
               />
             </div>
           </div>

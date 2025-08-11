@@ -553,6 +553,7 @@ export interface Expense {
   description: string
   amount: number
   vendor?: string
+  vendor_id?: string
   date: string
   status: string
   payment_method?: string

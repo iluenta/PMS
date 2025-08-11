@@ -5,6 +5,7 @@ export interface DistributionChannel {
   logo?: string
   created_at: string
   updated_at: string
+  person_id?: string | null
 }
 
 // Tipos para configuración de canal por propiedad
@@ -36,11 +37,13 @@ export interface PropertyChannel {
 export interface CreateChannelData {
   name: string
   logo?: string
+  person_id?: string | null
 }
 
 export interface UpdateChannelData {
   name?: string
   logo?: string
+  person_id?: string | null
 }
 
 export interface CreatePropertyChannelData {

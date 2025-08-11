@@ -171,19 +171,24 @@ export default function Settings() {
     try {
       if (editingChannel) {
         const deleteExistingLogo = editingChannel.logo ? !formData.logo : false
-        await updateChannel(editingChannel.id, { name: formData.name }, logoFile || undefined, deleteExistingLogo)
+        await updateChannel(editingChannel.id, { name: formData.name, person_id: channelPerson.personId || null }, logoFile || undefined, deleteExistingLogo)
         toast({
           title: "Canal actualizado",
           description: "El canal se ha actualizado correctamente"
         })
       } else {
-        const created = await createChannel({ name: formData.name }, logoFile || undefined)
-        // Optionally link person to distribution_channels if provided
-        if (channelPerson.personId) {
+        // Crear la persona si el usuario escribió nombre pero no seleccionó entidad
+        let personId = channelPerson.personId || null
+        if (!personId && formData.name.trim()) {
           try {
-            await fetch('/api/_link-channel-person', { method: 'POST', body: JSON.stringify({ channelId: created.id, personId: channelPerson.personId }) })
-          } catch {}
+            const peopleApi = await import('@/lib/peopleService')
+            const createdPerson = await peopleApi.createPerson({ person_type: 'distribution_channel', company_name: formData.name } as any)
+            personId = createdPerson.id
+          } catch (e) {
+            // Continuar sin bloquear si falla la creación; FK podría permitir null en tu esquema actual
+          }
         }
+        const created = await createChannel({ name: formData.name, person_id: personId }, logoFile || undefined)
         toast({
           title: "Canal creado",
           description: "El canal se ha creado correctamente"
@@ -193,6 +198,7 @@ export default function Settings() {
       setIsDialogOpen(false)
       setEditingChannel(null)
       resetForm()
+      setChannelPerson({ name: "", personId: undefined })
       loadChannels()
     } catch (error) {
       console.error("Error saving channel:", error)
@@ -274,6 +280,8 @@ export default function Settings() {
     if (channel.logo) {
       setLogoPreview(channel.logo)
     }
+    // Preload associated person if present: we don't know the name, so keep personId and lazy fetch name
+    setChannelPerson({ name: '', personId: channel.person_id })
     setIsDialogOpen(true)
   }
 
@@ -445,6 +453,7 @@ export default function Settings() {
                   <Button onClick={() => {
                     setEditingChannel(null)
                     resetForm()
+                    setChannelPerson({ name: "", personId: undefined })
                   }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo Canal
@@ -519,6 +528,7 @@ export default function Settings() {
                           setIsDialogOpen(false)
                           setEditingChannel(null)
                           resetForm()
+                          setChannelPerson({ name: "", personId: undefined })
                         }}
                       >
                         Cancelar
