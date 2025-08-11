@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Edit, Trash2, UserSquare2 } from 'lucide-react'
 import type { Person, PersonType } from '@/types/people'
 import { listPeople, deletePerson } from '@/lib/peopleService'
+import PersonForm from '@/components/PersonForm'
 
 function getTypeColor(type: PersonType) {
   switch (type) {
@@ -79,14 +80,18 @@ export default function PeoplePage() {
               <Plus className="h-4 w-4 mr-2" /> Nueva persona
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingPerson ? 'Editar persona' : 'Nueva persona'}</DialogTitle>
             </DialogHeader>
-            {/* Paso 5 implementará <PersonForm />. Por ahora, placeholder visual. */}
-            <div className="text-sm text-gray-600">
-              El formulario de creación/edición se añadirá en el Paso 5.
-            </div>
+            <PersonForm
+              person={editingPerson}
+              onClose={() => setIsDialogOpen(false)}
+              onSaved={async () => {
+                const data = await listPeople(typeFilter === 'all' ? undefined : { person_type: typeFilter })
+                setPeople(data)
+              }}
+            />
           </DialogContent>
         </Dialog>
       </div>
