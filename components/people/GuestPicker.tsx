@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ interface Props {
 
 export function GuestPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
@@ -34,6 +35,7 @@ export function GuestPicker({ value, onChange }: Props) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Input
+          ref={inputRef}
           value={value.name}
           placeholder="Nombre completo"
           onChange={(e) => { onChange({ ...value, name: e.target.value }); setQuery(e.target.value) }}
@@ -48,7 +50,7 @@ export function GuestPicker({ value, onChange }: Props) {
             <CommandEmpty>No hay resultados</CommandEmpty>
             <CommandGroup heading="Coincidencias">
               {results.map((p) => (
-                <CommandItem key={p.id} value={p.id} onSelect={() => { setOpen(false); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(), email: p.email ?? '', phone: p.phone ?? '' }, p) }}>
+                <CommandItem key={p.id} value={p.id} onSelect={() => { setOpen(false); inputRef.current?.blur(); onChange({ name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(), email: p.email ?? '', phone: p.phone ?? '' }, p) }}>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex flex-col">
                       <span className="font-medium">{`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.company_name || 'Sin nombre'}</span>
@@ -61,7 +63,7 @@ export function GuestPicker({ value, onChange }: Props) {
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading="Acciones">
-              <CommandItem onSelect={() => { setOpen(false) }}>Crear nueva persona con los datos escritos</CommandItem>
+              <CommandItem onSelect={() => { setOpen(false); inputRef.current?.blur() }}>Crear nueva persona con los datos escritos</CommandItem>
             </CommandGroup>
           </CommandList>
         </Command>
