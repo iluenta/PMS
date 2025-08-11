@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { ProviderPicker } from '@/components/people/ProviderPicker'
+import { ChannelPicker } from '@/components/people/ChannelPicker'
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -476,7 +476,7 @@ export default function Settings() {
 
                      <div className="space-y-2">
                        <Label>Entidad (People) asociada</Label>
-                       <ProviderPicker
+                       <ChannelPicker
                          value={{ name: channelPerson.name, personId: channelPerson.personId }}
                          onChange={(v) => setChannelPerson({ name: v.name, personId: v.personId })}
                        />
