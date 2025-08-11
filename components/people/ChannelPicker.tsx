@@ -19,6 +19,7 @@ export function ChannelPicker({ value, onChange }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
+  const [bootstrapped, setBootstrapped] = useState(false)
 
   function closePopover() {
     setOpen(false)
@@ -41,6 +42,23 @@ export function ChannelPicker({ value, onChange }: Props) {
     }, 300)
     return () => clearTimeout(t)
   }, [query])
+
+  // If a personId is provided but no name, fetch it once to bootstrap the visible value
+  useEffect(() => {
+    ;(async () => {
+      if (!bootstrapped && value.personId && !value.name) {
+        try {
+          const { getPerson } = await import('@/lib/peopleService')
+          const p = await getPerson(value.personId)
+          if (p) {
+            const name = p.company_name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()
+            if (name) onChange({ ...value, name, personId: value.personId })
+          }
+        } catch {}
+        setBootstrapped(true)
+      }
+    })()
+  }, [value.personId, value.name, bootstrapped])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
