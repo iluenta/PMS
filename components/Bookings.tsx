@@ -51,6 +51,7 @@ import {
   Trash2,
   DollarSign
 } from "lucide-react"
+import { GuestPicker } from '@/components/people/GuestPicker'
 
 export default function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -1039,6 +1040,27 @@ function BookingDialog({
     }
 
     try {
+      // Vinculación con people: si hay persona seleccionada por el picker, usar su id; si no existe, crearla
+      let personId: string | null = null
+      const picked = (formData as any)._picked_person as any | undefined
+      if (picked?.id) {
+        personId = picked.id as string
+      } else if (!picked && (formData.guest_name || formData.guest_email || formData.guest_phone)) {
+        // Crear persona mínima si no hay id
+        try {
+          const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
+          const created = await (await import('@/lib/peopleService')).createPerson({
+            person_type: 'guest',
+            first_name: first || '',
+            last_name: rest.join(' ') || '',
+            email: formData.guest_email || undefined,
+            phone: formData.guest_phone || undefined,
+            country: formData.guest_country || undefined,
+          })
+          personId = created.id
+          ;(formData as any)._picked_person = created
+        } catch {}
+      }
       // Prepare guest data as JSONB
       const guestData = {
         name: `${formData.guest_name}`,
@@ -1179,7 +1201,8 @@ function BookingDialog({
         channel_commission: formData.channel_commission,
         collection_commission: formData.collection_commission,
         external_source: formData.booking_source,
-        external_id: formData.external_id || null
+        external_id: formData.external_id || null,
+        person_id: personId
       }
 
       // Ensure we have a valid property_channel_id
@@ -1449,18 +1472,29 @@ function BookingDialog({
           {/* Sección Izquierda: Información del Huésped */}
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Información del Huésped</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
-                <Input
-                  id="guest_name"
-                  value={formData.guest_name}
-                  onChange={(e) => setFormData({ ...formData, guest_name: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
-                  required
-                  className="h-10"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
+                  {/* GuestPicker: autocompletar desde people */}
+                  <GuestPicker
+                    value={{ name: formData.guest_name, email: formData.guest_email || '', phone: formData.guest_phone || '' }}
+                    onChange={(val, picked) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        guest_name: val.name,
+                        guest_email: val.email || '',
+                        guest_phone: val.phone || '',
+                        // guardaremos person_id en submit; almacenamos temporalmente en notes para no romper tipos
+                      }))
+                      if (picked) {
+                        // Usamos propiedad temporal en objeto para reusar en submit (evitar ampliar formData tipos ahora)
+                        ;(formData as any)._picked_person = picked
+                      } else {
+                        delete (formData as any)._picked_person
+                      }
+                    }}
+                  />
+                </div>
               
               <div className="space-y-2">
                 <Label htmlFor="guest_email" className="text-sm font-medium text-gray-700">Email</Label>

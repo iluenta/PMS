@@ -56,4 +56,19 @@ export async function deletePerson(id: string): Promise<void> {
   if (error) throw mapError(error, 'Error al eliminar la persona')
 }
 
+export async function searchPeople({ query, type = 'guest', limit = 10 }: { query: string; type?: PersonType; limit?: number }) {
+  ensureAuth()
+  const q = query.trim()
+  if (!q) return []
+  const ilike = `%${q}%`
+  const { data, error } = await supabase
+    .from('people')
+    .select('*')
+    .eq('person_type', type)
+    .or(`first_name.ilike.${ilike},last_name.ilike.${ilike},company_name.ilike.${ilike},email.ilike.${ilike},phone.ilike.${ilike}`)
+    .limit(limit)
+  if (error) throw mapError(error, 'Error al buscar personas')
+  return data as Person[]
+}
+
 
