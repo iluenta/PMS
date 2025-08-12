@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isDemoMode } from '@/lib/supabase'
+// removed demo mode
 import { listPeople, createPerson } from '@/lib/peopleService'
 import type { PersonType, CreatePersonInput } from '@/types/people'
 

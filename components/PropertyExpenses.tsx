@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { supabase, isDemoMode, mockData, type Expense, type Property, type Reservation } from "@/lib/supabase"
+import { supabase, type Expense, type Property, type Reservation } from "@/lib/supabase"
 import { getExpenseCategories, getExpenseSubcategories } from "@/lib/expenses"
 import { type ExpenseCategory, type ExpenseSubcategory } from "@/types/expenses"
 import { Receipt, Plus, Edit, CheckCircle, Clock, AlertCircle, Building2, Trash2, Filter, Search, UploadCloud, Download, FileText, Paperclip } from "lucide-react"
@@ -97,46 +97,6 @@ export default function PropertyExpenses() {
     
     try {
       setLoading(true)
-      if (isDemoMode) {
-        // Mock data for expenses
-        const mockExpenses: Expense[] = [
-          {
-            id: "1",
-            category_id: "cat-maintenance",
-            subcategory_id: "sub-plumbing",
-            description: "Reparación grifo cocina",
-            amount: 85.00,
-            vendor: "Fontanería Express",
-            date: "2024-02-18",
-            status: "paid",
-            payment_method: "transfer",
-            reference: "REF001",
-            notes: "Reparación urgente",
-            property_id: selectedProperty.id,
-            created_at: "2024-02-18T10:00:00Z",
-            updated_at: "2024-02-18T10:00:00Z"
-          },
-          {
-            id: "2",
-            category_id: "cat-utilities",
-            subcategory_id: "sub-electricity",
-            description: "Factura electricidad febrero",
-            amount: 120.00,
-            vendor: "Iberdrola",
-            date: "2024-02-28",
-            status: "pending",
-            payment_method: "transfer",
-            reference: "REF002",
-            property_id: selectedProperty.id,
-            created_at: "2024-02-28T10:00:00Z",
-            updated_at: "2024-02-28T10:00:00Z"
-          }
-        ]
-
-        setExpenses(mockExpenses)
-        setReservations([])
-        return
-      }
 
       // Fetch expenses for the selected property
       const { data: expensesData, error: expensesError } = await supabase
@@ -242,13 +202,7 @@ export default function PropertyExpenses() {
     if (!expenseToDelete) return
 
     try {
-      if (isDemoMode) {
-        // Mock deletion
-        setExpenses(expenses.filter(e => e.id !== expenseToDelete.id))
-        setIsDeleteDialogOpen(false)
-        setExpenseToDelete(null)
-        return
-      }
+      
 
       const { error } = await supabase
         .from("expenses")
@@ -1396,28 +1350,7 @@ function ExpenseDialog({
     const loadCategories = async () => {
       try {
         setLoadingCategories(true)
-        
-        if (isDemoMode) {
-          // Mock data para demo
-          const mockCategories: ExpenseCategory[] = [
-            { id: "1", description: "Mantenimiento", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "2", description: "Servicios", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "3", description: "Suministros", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "4", description: "Marketing", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "5", description: "Seguros", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "6", description: "Impuestos", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "7", description: "Otros", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" }
-          ]
-          setCategories(mockCategories)
-          
-          const mockSubcategories: ExpenseSubcategory[] = [
-            { id: "1", category_id: "1", description: "Fontanería", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "2", category_id: "1", description: "Electricidad", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "3", category_id: "2", description: "Limpieza", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" },
-            { id: "4", category_id: "3", description: "Amenities", created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z" }
-          ]
-          setSubcategories(mockSubcategories)
-        } else {
+        {
           // Cargar categorías desde la base de datos
           const { data: categoriesData, error: categoriesError } = await supabase
             .from("expense_categories")
@@ -1555,12 +1488,7 @@ function ExpenseDialog({
     e.preventDefault()
 
     try {
-      if (isDemoMode) {
-        alert(expense ? "Gasto actualizado (Demo)" : "Gasto creado (Demo)")
-        onSave()
-        onClose()
-        return
-      }
+      
 
       // Validar datos requeridos
       if (!formData.description || !formData.amount || !formData.date) {

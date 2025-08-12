@@ -17,14 +17,12 @@ import {
   Calendar,
   Users,
   CreditCard,
-  DollarSign,
   Receipt,
   BookOpen,
   BarChart3,
   Settings,
   LogOut,
   Globe,
-  FileText,
 } from "lucide-react"
 
 const navigation = [
@@ -35,12 +33,9 @@ const navigation = [
   { name: "Canales de Distribución", href: "/property-channels", icon: Globe },
   { name: "Pagos de Reservas", href: "/booking-payments", icon: CreditCard },
   { name: "Gastos de Propiedades", href: "/property-expenses", icon: Receipt },
-  { name: "Huéspedes", href: "/guests", icon: Users },
   { name: "Personas", href: "/people", icon: Users },
-  { name: "Precios", href: "/pricing", icon: DollarSign },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Configuración", href: "/settings", icon: Settings },
-  { name: "Gestión de Guías", href: "/traveler-guide-management", icon: FileText },
 ]
 
 function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { supabase, type Property, isDemoMode, mockData } from "@/lib/supabase"
+import { supabase, type Property } from "@/lib/supabase"
 
 // Tipos para el contexto
 interface PropertyContextType {
@@ -48,16 +48,7 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
     try {
       setLoading(true)
       
-      if (isDemoMode) {
-        const demoProperties = mockData.properties || []
-        setProperties(demoProperties)
-        
-        // Seleccionar la primera propiedad por defecto en demo
-        if (demoProperties.length > 0) {
-          setSelectedProperty(demoProperties[0])
-        }
-        return
-      }
+      
 
       const { data, error } = await supabase
         .from("properties")

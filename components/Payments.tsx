@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase, isDemoMode, mockData, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
+import { supabase, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
 import { useProperty } from "@/hooks/useProperty"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
 

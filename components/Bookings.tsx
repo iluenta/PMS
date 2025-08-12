@@ -19,8 +19,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   supabase, 
-  isDemoMode, 
-  mockData, 
   type Booking, 
   type Property, 
   type Guest, 
@@ -411,10 +409,7 @@ export default function Bookings() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
       try {
-        if (isDemoMode) {
-          console.log("Demo mode: Would delete booking", id)
-          return
-        }
+        
 
         const { error } = await supabase
           .from("reservations")
