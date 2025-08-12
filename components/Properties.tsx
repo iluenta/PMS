@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { supabase, isDemoMode, mockData, type Property } from "@/lib/supabase"
+import { supabase, type Property } from "@/lib/supabase"
 import { Building2, Plus, Edit, MapPin, Users, Bed, Bath, Camera, X, Star, BookOpen, CalendarCheck, Globe } from "lucide-react"
 import PropertyChannels from "./PropertyChannels"
 import { useToast } from "@/hooks/use-toast"
@@ -76,10 +76,7 @@ export default function Properties() {
 
   const fetchProperties = async () => {
     try {
-      if (isDemoMode) {
-        setProperties(mockData.properties)
-        return
-      }
+      
 
       const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
 
@@ -417,15 +414,7 @@ function PropertyDialog({
     e.preventDefault()
 
     try {
-      if (isDemoMode) {
-        toast({
-          title: "Demo",
-          description: property ? "Propiedad actualizada (Demo)" : "Propiedad creada (Demo)"
-        })
-        onSave()
-        onClose()
-        return
-      }
+      
 
       if (property) {
         // Remove cover_image from formData as it doesn't exist in the database

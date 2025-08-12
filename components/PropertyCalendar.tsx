@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { supabase, type Property } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
 import CalendarNavigation from "./CalendarNavigation"
-import PropertyConfig from "./PropertyConfig"
 import PropertyStats from "./PropertyStats"
 import EnhancedCalendar from "./EnhancedCalendar"
 import AvailabilityList from "./AvailabilityList"
 
-type ViewMode = 'calendar' | 'list' | 'statistics'
+type ViewMode = 'calendar' | 'list'
 
 export default function PropertyCalendar() {
-  const [properties, setProperties] = useState<Property[]>([])
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("")
   const [currentView, setCurrentView] = useState<ViewMode>('calendar')
-  const [loading, setLoading] = useState(true)
+
+  // Global property context
+  const { selectedProperty } = useProperty()
 
   // Estados para estadísticas
   const [stats, setStats] = useState({
@@ -26,47 +26,20 @@ export default function PropertyCalendar() {
   })
 
   useEffect(() => {
-    loadProperties()
-  }, [])
-
-  useEffect(() => {
-    if (selectedPropertyId) {
+    if (selectedProperty) {
       calculateStats()
     }
-  }, [selectedPropertyId])
-
-  const loadProperties = async () => {
-    try {
-      setLoading(true)
-      
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      
-      const propertiesData = data || []
-      setProperties(propertiesData)
-      
-      // Auto-seleccionar la primera propiedad si existe
-      if (propertiesData.length > 0) {
-        setSelectedPropertyId(propertiesData[0].id)
-      }
-    } catch (error) {
-      console.error("Error loading properties:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [selectedProperty])
 
   const calculateStats = async () => {
     try {
+      if (!selectedProperty) return
+
       // Obtener reservas de la propiedad
       const { data: reservationsData, error } = await supabase
         .from("reservations")
         .select("*")
-        .eq("property_id", selectedPropertyId)
+        .eq("property_id", selectedProperty.id)
 
       if (error) throw error
 
@@ -115,35 +88,7 @@ export default function PropertyCalendar() {
     }
   }
 
-  const selectedProperty = properties.find(p => p.id === selectedPropertyId)
-
-  const handleFilters = () => {
-    console.log("Abrir filtros")
-    // TODO: Implementar modal de filtros
-  }
-
-  const handleSearch = () => {
-    console.log("Abrir búsqueda")
-    // TODO: Implementar búsqueda
-  }
-
-  const handleExport = () => {
-    console.log("Exportar datos")
-    // TODO: Implementar exportación
-  }
-
-  const handleNewReservation = () => {
-    console.log("Nueva reserva")
-    // TODO: Implementar modal de nueva reserva
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  // const selectedProperty = properties.find(p => p.id === selectedPropertyId) // This state is no longer needed
 
   return (
     <div className="space-y-6">
@@ -153,20 +98,8 @@ export default function PropertyCalendar() {
         onViewChange={setCurrentView}
       />
 
-      {/* Property Configuration */}
-      <PropertyConfig
-        properties={properties}
-        selectedPropertyId={selectedPropertyId}
-        onPropertyChange={setSelectedPropertyId}
-        selectedProperty={selectedProperty}
-        onFilters={handleFilters}
-        onSearch={handleSearch}
-        onExport={handleExport}
-        onNewReservation={handleNewReservation}
-      />
-
       {/* Statistics */}
-      {selectedPropertyId && (
+      {selectedProperty && (
         <PropertyStats
           occupancy={stats.occupancy}
           reservedDays={stats.reservedDays}
@@ -178,36 +111,19 @@ export default function PropertyCalendar() {
       )}
 
       {/* Content based on current view */}
-      {selectedPropertyId && (
+      {selectedProperty && (
         <>
           {currentView === 'calendar' && (
-            <EnhancedCalendar
-              selectedPropertyId={selectedPropertyId}
-              selectedProperty={selectedProperty}
-            />
+            <EnhancedCalendar />
           )}
 
           {currentView === 'list' && (
-            <AvailabilityList
-              selectedPropertyId={selectedPropertyId}
-              selectedProperty={selectedProperty}
-            />
-          )}
-
-          {currentView === 'statistics' && (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Estadísticas Detalladas
-              </h3>
-              <p className="text-gray-500">
-                Vista de estadísticas avanzadas próximamente
-              </p>
-            </div>
+            <AvailabilityList />
           )}
         </>
       )}
 
-      {!selectedPropertyId && (
+      {!selectedProperty && (
         <div className="text-center py-12">
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Selecciona una Propiedad

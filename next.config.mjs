@@ -9,10 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Configuración para manejar problemas de certificados SSL
-  experimental: {
-    serverExternalPackages: [],
-  },
+  // experimental config removed
   // Configuración para desarrollo local
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {

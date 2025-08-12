@@ -6,16 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Search } from "lucide-react"
+import { useProperty } from "@/hooks/useProperty"
 
 interface QuickAvailabilityCheckProps {
-  selectedPropertyId: string
   onCheckAvailability: (checkIn: string, checkOut: string, nights: number) => void
 }
 
 export default function QuickAvailabilityCheck({ 
-  selectedPropertyId, 
   onCheckAvailability 
 }: QuickAvailabilityCheckProps) {
+  const { selectedProperty } = useProperty()
   const [checkInDate, setCheckInDate] = useState("")
   const [checkOutDate, setCheckOutDate] = useState("")
   const [nights, setNights] = useState(1)
@@ -77,7 +77,7 @@ export default function QuickAvailabilityCheck({
             <Label>&nbsp;</Label>
             <Button
               onClick={handleCheckAvailability}
-              disabled={!selectedPropertyId || !checkInDate || !checkOutDate}
+              disabled={!selectedProperty || !checkInDate || !checkOutDate}
               className="w-full"
             >
               Verificar

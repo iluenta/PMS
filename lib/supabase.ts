@@ -1,305 +1,12 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 
-// ============================================================================
-// Mock Data (for Demo Mode)
-// ============================================================================
-
-const mockProperties = [
-    {
-      id: "550e8400-e29b-41d4-a716-446655440001",
-    name: "Luxury Apartment in Madrid",
-    description: "A spacious and modern apartment in the heart of Madrid, perfect for a family or a group of friends.",
-    type: "Apartment",
-    address: "Calle de Ruiz de Alarcón, 23, 28014 Madrid",
-      city: "Madrid",
-    postal_code: "28014",
-    country: "Spain",
-      bedrooms: 2,
-      bathrooms: 1,
-    capacity: 4,
-    area: 60,
-    base_price: 100,
-    cleaning_fee: 20,
-    security_deposit: 100,
-    check_in_time: "15:00",
-    check_out_time: "11:00",
-    min_stay: 1,
-    max_stay: 30,
-    is_active: true,
-      images: [
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-    ],
-    amenities: ["WiFi", "Aire acondicionado", "Cocina completa", "Baño privado"],
-      status: "active",
-    channel_ratings: {
-      Booking: 4.5,
-      Airbnb: 4.8,
-      Expedia: 4.2,
-    },
-    channel_configuration: {
-      Booking: {
-        api_key: "your_booking_api_key",
-        channel_type: "ota",
-      },
-      Airbnb: {
-        api_key: "your_airbnb_api_key",
-        channel_type: "ota",
-      },
-      Expedia: {
-        api_key: "your_expedia_api_key",
-        channel_type: "ota",
-      },
-    },
-    created_at: "2024-01-01T10:00:00Z",
-    updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "550e8400-e29b-41d4-a716-446655440002",
-    name: "Cozy Studio in Barcelona",
-    description: "A cozy and comfortable studio in the Gothic Quarter of Barcelona.",
-    type: "Studio",
-    address: "Calle de Cuchilleros, 17, 28005 Barcelona",
-      city: "Barcelona",
-    postal_code: "08003",
-    country: "Spain",
-    bedrooms: 0,
-      bathrooms: 1,
-    capacity: 2,
-    area: 30,
-    base_price: 50,
-    cleaning_fee: 10,
-    security_deposit: 50,
-    check_in_time: "14:00",
-    check_out_time: "10:00",
-    min_stay: 1,
-    max_stay: 30,
-    is_active: true,
-      images: [
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-    ],
-    amenities: ["WiFi", "Aire acondicionado", "Baño privado"],
-      status: "active",
-    channel_ratings: {
-      Booking: 4.0,
-      Airbnb: 4.5,
-      Expedia: 3.8,
-    },
-    channel_configuration: {
-      Booking: {
-        api_key: "your_booking_api_key",
-        channel_type: "ota",
-      },
-      Airbnb: {
-        api_key: "your_airbnb_api_key",
-        channel_type: "ota",
-      },
-      Expedia: {
-        api_key: "your_expedia_api_key",
-        channel_type: "ota",
-      },
-    },
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-15T10:00:00Z",
-    },
-    {
-      id: "550e8400-e29b-41d4-a716-446655440003",
-    name: "Modern Loft in Valencia",
-    description: "A modern and stylish loft in the heart of Valencia, close to the beach.",
-    type: "Loft",
-    address: "Calle de San Vicente, 10, 46003 Valencia",
-      city: "Valencia",
-    postal_code: "46003",
-    country: "Spain",
-    bedrooms: 1,
-    bathrooms: 1,
-    capacity: 2,
-    area: 40,
-    base_price: 70,
-    cleaning_fee: 15,
-    security_deposit: 70,
-    check_in_time: "16:00",
-    check_out_time: "11:00",
-    min_stay: 1,
-    max_stay: 30,
-    is_active: true,
-      images: [
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-      "https://via.placeholder.com/600x400",
-    ],
-    amenities: ["WiFi", "Aire acondicionado", "Cocina completa", "Baño privado"],
-    status: "pending",
-    created_at: "2024-02-28T10:00:00Z",
-    updated_at: "2024-02-28T10:00:00Z",
-  },
-]
-
-const mockGuests = [
-  {
-    id: "550e8400-e29b-41d4-a716-446655440001",
-      first_name: "John",
-    last_name: "Doe",
-    email: "john.doe@example.com",
-    phone: "+34 600 123 456",
-    country: "Spain",
-    date_of_birth: "1990-01-01",
-    id_number: "12345678Z",
-    notes: "Regular guest",
-    created_at: "2024-01-01T10:00:00Z",
-    updated_at: "2024-01-01T10:00:00Z",
-  },
-  {
-    id: "550e8400-e29b-41d4-a716-446655440002",
-    first_name: "Jane",
-    last_name: "Smith",
-    email: "jane.smith@example.com",
-    phone: "+34 600 789 012",
-    country: "Spain",
-    date_of_birth: "1995-05-10",
-    id_number: "87654321Y",
-    notes: "VIP guest",
-      created_at: "2024-01-10T10:00:00Z",
-      updated_at: "2024-01-10T10:00:00Z",
-    },
-    {
-    id: "550e8400-e29b-41d4-a716-446655440003",
-    first_name: "Peter",
-    last_name: "Jones",
-    email: "peter.jones@example.com",
-    phone: "+34 600 234 567",
-    country: "Spain",
-    date_of_birth: "2000-11-20",
-    id_number: "11223344A",
-    notes: "First-time guest",
-    created_at: "2024-02-01T10:00:00Z",
-    updated_at: "2024-02-01T10:00:00Z",
-  },
-]
-
-const mockBookings = [
-    {
-      id: "750e8400-e29b-41d4-a716-446655440001",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-    guest_id: "550e8400-e29b-41d4-a716-446655440001",
-    check_in: "2024-01-20",
-    check_out: "2024-01-25",
-      guests_count: 2,
-    total_amount: 500,
-      commission_rate: 15.0,
-    commission_amount: 75,
-    net_amount: 425,
-    status: "completed",
-      booking_source: "Booking.com",
-    special_requests: "No special requests",
-      created_at: "2024-01-20T10:00:00Z",
-    updated_at: "2024-01-25T10:00:00Z",
-    property: mockProperties[0],
-    guest: mockGuests[0],
-    },
-    {
-      id: "750e8400-e29b-41d4-a716-446655440002",
-      property_id: "550e8400-e29b-41d4-a716-446655440002",
-    guest_id: "550e8400-e29b-41d4-a716-446655440002",
-    check_in: "2024-02-14",
-    check_out: "2024-02-16",
-    guests_count: 1,
-    total_amount: 200,
-      commission_rate: 12.0,
-    commission_amount: 24,
-    net_amount: 176,
-    status: "completed",
-      booking_source: "Airbnb",
-    special_requests: "Late check-in after 20:00",
-    created_at: "2024-02-14T10:00:00Z",
-    updated_at: "2024-02-16T10:00:00Z",
-    property: mockProperties[1],
-    guest: mockGuests[1],
-    },
-    {
-      id: "750e8400-e29b-41d4-a716-446655440003",
-      property_id: "550e8400-e29b-41d4-a716-446655440003",
-    guest_id: "550e8400-e29b-41d4-a716-446655440003",
-    check_in: "2024-01-20",
-    check_out: "2024-01-22",
-    guests_count: 2,
-    total_amount: 400,
-    commission_rate: 18.0,
-    commission_amount: 72,
-    net_amount: 328,
-      status: "pending",
-    booking_source: "Expedia",
-    special_requests: "Breakfast included",
-    created_at: "2024-01-20T10:00:00Z",
-    updated_at: "2024-01-22T10:00:00Z",
-    property: mockProperties[2],
-    guest: mockGuests[2],
-  },
-]
-
-const mockExpenses = [
-  {
-    id: "pe1",
-    property_id: "550e8400-e29b-41d4-a716-446655440001",
-    booking_id: "750e8400-e29b-41d4-a716-446655440001",
-    expense_type: "Cleaning",
-    category: "General",
-    description: "Regular cleaning of the apartment.",
-    amount: 50,
-    expense_date: "2024-01-20",
-    payment_method: "Cash",
-    receipt_url: "https://via.placeholder.com/150x100",
-    vendor_name: "Cleaning Service",
-    is_recurring: false,
-    status: "completed",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-    {
-    id: "pe2",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-    booking_id: "750e8400-e29b-41d4-a716-446655440001",
-    expense_type: "Maintenance",
-    category: "Repairs",
-    description: "Fixing a leaky faucet.",
-    amount: 20,
-    expense_date: "2024-01-25",
-    payment_method: "Bank Transfer",
-    receipt_url: "https://via.placeholder.com/150x100",
-    vendor_name: "Handyman Service",
-    is_recurring: false,
-    status: "completed",
-    created_at: "2024-01-25T10:00:00Z",
-    updated_at: "2024-01-25T10:00:00Z",
-  },
-  {
-    id: "pe3",
-    property_id: "550e8400-e29b-41d4-a716-446655440002",
-    booking_id: "750e8400-e29b-41d4-a716-446655440002",
-    expense_type: "Utilities",
-    category: "Electricity",
-    description: "Electricity bill for February.",
-    amount: 100,
-    expense_date: "2024-02-01",
-    payment_method: "Credit Card",
-    receipt_url: "https://via.placeholder.com/150x100",
-    vendor_name: "Electricity Company",
-    is_recurring: true,
-    recurring_frequency: "monthly",
-    status: "pending",
-    created_at: "2024-02-01T10:00:00Z",
-    updated_at: "2024-02-01T10:00:00Z",
-  },
-]
+// No demo data in production repository
 
 // ============================================================================
 // Supabase Client Initialization (Singleton Pattern)
 // ============================================================================
 
-let supabase: SupabaseClient
+let supabase: SupabaseClient | null = null
 
 function getSupabaseClient() {
   if (!supabase) {
@@ -307,10 +14,16 @@ function getSupabaseClient() {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
-        console.warn("Supabase URL or Anon Key is missing, but not in demo mode. Auth will likely fail.")
-      }
-      // In demo mode or if keys are missing, we don't create a real client
+      console.warn("Supabase URL or Anon Key is missing. Auth will likely fail.")
+      // Create a dummy client to prevent undefined errors
+      supabase = createClient("https://dummy.supabase.co", "dummy-key", {
+        auth: {
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
     } else {
       supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
@@ -329,10 +42,7 @@ function getSupabaseClient() {
 const supabaseClient = getSupabaseClient()
 
 // ============================================================================
-// Demo Mode Configuration
-// ============================================================================
-
-export const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || !supabaseClient
+// No demo mode
 
 // ============================================================================
 // Types and Interfaces
@@ -408,12 +118,47 @@ export interface Booking {
   total_commission?: number
   net_amount?: number
   status: string
+  payment_status?: string
   booking_source: string
   special_requests?: string
+  notes?: string
   created_at: string
   updated_at: string
   property?: Property
   guest?: Guest
+}
+
+export interface DistributionChannel {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  logo?: string
+}
+
+export interface PropertyChannel {
+  id: string
+  property_id: string
+  channel_id: string
+  is_enabled: boolean
+  sync_enabled: boolean
+  auto_update_ratings: boolean
+  external_property_id?: string
+  external_listing_id?: string
+  external_place_id?: string
+  listing_url?: string
+  review_url?: string
+  property_rating?: number
+  property_review_count?: number
+  last_rating_update?: string
+  price_adjustment_percentage: number
+  commission_override_charge?: number
+  commission_override_sale?: number
+  availability_sync_enabled: boolean
+  instant_booking_enabled: boolean
+  created_at: string
+  updated_at: string
+  channel?: DistributionChannel
 }
 
 export interface Reservation {
@@ -445,8 +190,11 @@ export interface Reservation {
   ical_uid?: string
   channel_commission: number
   collection_commission: number
+  property_channel_id: string
   created_at: string
   updated_at: string
+  property?: Property
+  property_channel?: PropertyChannel
 }
 
 export interface CommissionSetting {
@@ -498,6 +246,32 @@ export interface PropertyExpense {
   updated_at: string
   property?: Property
   booking?: Booking
+}
+
+export interface Expense {
+  id: string
+  category?: string
+  subcategory?: string
+  description: string
+  amount: number
+  vendor?: string
+  vendor_id?: string
+  date: string
+  status: string
+  payment_method?: string
+  reference?: string
+  notes?: string
+  receipt_url?: string
+  property_id?: string
+  is_recurring?: boolean
+  next_due_date?: string
+  created_at: string
+  updated_at: string
+  reservation_id?: string
+  category_id?: string
+  subcategory_id?: string
+  property?: Property
+  reservation?: Reservation
 }
 
 export interface TravelerGuideSection {
@@ -564,297 +338,38 @@ export interface Channel {
   created_at: string
 }
 
-// ============================================================================
-// Mock Data (for Demo Mode)
-// ============================================================================
-
-export const mockData = {
-  properties: mockProperties,
-  guests: mockGuests,
-  bookings: mockBookings,
-  commissionSettings: [
-    {
-      id: "cs1",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      channel_name: "Booking.com",
-      channel_type: "ota",
-      commission_rate: 15.0,
-      commission_type: "percentage",
-      fixed_amount: 0,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "cs2",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      channel_name: "Airbnb",
-      channel_type: "ota",
-      commission_rate: 12.0,
-      commission_type: "percentage",
-      fixed_amount: 0,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "cs3",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      channel_name: "Expedia",
-      channel_type: "ota",
-      commission_rate: 18.0,
-      commission_type: "percentage",
-      fixed_amount: 0,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "cs4",
-      owner_id: "550e8400-e29b-41d4-a716-446655440000",
-      channel_name: "Canal Directo",
-      channel_type: "direct",
-      commission_rate: 0.0,
-      commission_type: "percentage",
-      fixed_amount: 0,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ],
-  bookingPayments: [
-    {
-      id: "bp1",
-      booking_id: "750e8400-e29b-41d4-a716-446655440001",
-      payment_type: "deposit",
-      amount: 225.0,
-      commission_amount: 33.75,
-      net_amount: 191.25,
-      payment_method: "card",
-      payment_status: "completed",
-      payment_date: "2024-01-20",
-      reference_number: "PAY-001",
-      notes: "",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-    {
-      id: "bp2",
-      booking_id: "750e8400-e29b-41d4-a716-446655440001",
-      payment_type: "balance",
-      amount: 225.0,
-      commission_amount: 33.75,
-      net_amount: 191.25,
-      payment_method: "card",
-      payment_status: "completed",
-      payment_date: "2024-02-14",
-      reference_number: "PAY-002",
-      notes: "",
-      created_at: "2024-02-14T10:00:00Z",
-      updated_at: "2024-02-14T10:00:00Z",
-    },
-    {
-      id: "bp3",
-      booking_id: "750e8400-e29b-41d4-a716-446655440002",
-      payment_type: "deposit",
-      amount: 205.0,
-      commission_amount: 24.6,
-      net_amount: 180.4,
-      payment_method: "paypal",
-      payment_status: "completed",
-      payment_date: "2024-01-20",
-      reference_number: "PAY-003",
-      notes: "",
-      created_at: "2024-01-20T10:00:00Z",
-      updated_at: "2024-01-20T10:00:00Z",
-    },
-  ],
-  propertyExpenses: mockExpenses,
-  travelerGuideSections: [
-    {
-      id: "tgs1",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "checkin",
-      title: "Información de Check-in",
-      content:
-        "El check-in es a partir de las 15:00h. Encontrarás las llaves en la caja fuerte ubicada en la entrada del edificio. El código te será enviado el día de tu llegada.",
-      order_index: 1,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgs2",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "apartment_info",
-      title: "Información del Apartamento",
-      content:
-        "Apartamento de 2 habitaciones en pleno centro de Madrid. WiFi gratuito, aire acondicionado y cocina completamente equipada.",
-      order_index: 2,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgs3",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "places_to_visit",
-      title: "Lugares que Visitar",
-      content: "Madrid ofrece increíbles lugares para visitar cerca del apartamento.",
-      order_index: 3,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgs4",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "restaurants",
-      title: "Restaurantes Recomendados",
-      content: "Los mejores restaurantes cerca del apartamento.",
-      order_index: 4,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgs5",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "emergency_contacts",
-      title: "Contactos de Emergencia",
-      content: "Números importantes durante tu estancia.",
-      order_index: 5,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgs6",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      section_type: "house_rules",
-      title: "Normas de la Casa",
-      content:
-        "No se permite fumar en el interior del apartamento. Horario de silencio de 22:00 a 8:00. Máximo 4 huéspedes. No se permiten fiestas. Mantén el apartamento limpio y ordenado.",
-      order_index: 6,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ],
-  travelerGuideItems: [
-    {
-      id: "tgi1",
-      section_id: "tgs3",
-      title: "Museo del Prado",
-      description: "Uno de los museos más importantes del mundo con obras de Velázquez, Goya y El Greco.",
-      address: "Calle de Ruiz de Alarcón, 23, 28014 Madrid",
-      phone: "",
-      website: "",
-      image_url: "",
-      order_index: 1,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgi2",
-      section_id: "tgs3",
-      title: "Parque del Retiro",
-      description: "Hermoso parque en el centro de Madrid, perfecto para pasear y relajarse.",
-      address: "Plaza de la Independencia, 7, 28001 Madrid",
-      phone: "",
-      website: "",
-      image_url: "",
-      order_index: 2,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgi3",
-      section_id: "tgs4",
-      title: "Casa Botín",
-      description: "El restaurante más antiguo del mundo según el Guinness. Especialidad en cochinillo.",
-      address: "Calle de Cuchilleros, 17, 28005 Madrid",
-      phone: "+34 913 66 42 17",
-      website: "",
-      image_url: "",
-      order_index: 1,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgi4",
-      section_id: "tgs5",
-      title: "Emergencias Generales",
-      description: "Policía, Bomberos, Ambulancia",
-      address: "",
-      phone: "112",
-      website: "",
-      image_url: "",
-      order_index: 1,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "tgi5",
-      section_id: "tgs5",
-      title: "Anfitrión",
-      description: "Contacto directo con el propietario",
-      address: "",
-      phone: "+34 600 123 456",
-      website: "",
-      image_url: "",
-      order_index: 3,
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ],
-  availabilitySettings: [
-    {
-      id: "as1",
-      property_id: "550e8400-e29b-41d4-a716-446655440001",
-      min_nights: 2,
-      max_nights: 14,
-      advance_booking_days: 1,
-      max_advance_booking_days: 180,
-      check_in_days: ["friday", "saturday", "sunday"],
-      check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "as2",
-      property_id: "550e8400-e29b-41d4-a716-446655440002",
-      min_nights: 3,
-      max_nights: 21,
-      advance_booking_days: 2,
-      max_advance_booking_days: 365,
-      check_in_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-      check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: "as3",
-      property_id: "550e8400-e29b-41d4-a716-446655440003",
-      min_nights: 1,
-      max_nights: 30,
-      advance_booking_days: 0,
-      max_advance_booking_days: 90,
-      check_in_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-      check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-      is_active: true,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ],
+export interface Payment {
+  id: string
+  invoice_id?: string
+  invoice_number?: string
+  customer_name: string
+  amount: number
+  method: 'credit_card' | 'bank_transfer' | 'cash' | 'paypal' | 'check' | 'bizum'
+  status: 'pending' | 'completed' | 'failed' | 'refunded'
+  date: string
+  reference?: string
+  notes?: string
+  fee?: number
+  created_at: string
+  updated_at: string
+  reservation_id?: string
+  reservation?: Reservation
+  invoice?: Invoice
 }
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  customer_name: string
+  total_amount: number
+  status: string
+  issue_date: string
+  due_date?: string
+  created_at: string
+  updated_at: string
+}
+
+// demo datasets removed
 
 // ============================================================================
 // Utility Functions
@@ -871,9 +386,104 @@ export async function clearExpiredTokens() {
   }
 }
 
-// ============================================================================
-// Commission Calculation Functions
-// ============================================================================
+/**
+ * Calcula el importe requerido para una reserva basándose en el canal y las comisiones
+ * @param reservation - Objeto de reserva
+ * @returns Importe requerido calculado
+ */
+export function calculateRequiredAmount(reservation: Reservation): number {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+  
+  // Determinar el canal de la reserva
+  let channelName = 'Propio' // Default
+  
+  if (reservation.property_channel?.channel?.name) {
+    channelName = reservation.property_channel.channel.name
+  } else if (reservation.external_source) {
+    channelName = reservation.external_source
+  }
+  
+  // Normalizar nombres de canal propio
+  const propioChannels = ['Propio', 'Direct', 'Direct Booking', 'Canal Directo', 'Directo']
+  const isPropioChannel = propioChannels.some(name => 
+    channelName.toLowerCase().includes(name.toLowerCase())
+  )
+  
+  let result: number
+  
+  if (isPropioChannel && totalCommissions === 0) {
+    // Para canal propio sin comisiones: TOTAL (sin comisiones)
+    result = totalAmount
+  } else {
+    // Para canales con comisiones o canales propios con comisiones configuradas:
+    // TOTAL - (comisión venta + comisión cobro) * 1.21
+    const totalCommissionsWithIVA = totalCommissions * 1.21
+    result = totalAmount - totalCommissionsWithIVA
+  }
+  
+  // Redondear a 2 decimales y asegurar que no sea negativo
+  const roundedResult = Math.round(result * 100) / 100
+  return Math.max(0, roundedResult)
+}
+
+/**
+ * Calcula el estado del pago basándose en los pagos realizados y el importe requerido
+ * @param reservation - Objeto de reserva
+ * @param payments - Array de pagos realizados
+ * @returns Estado del pago: 'paid', 'partial', 'pending'
+ */
+export function calculatePaymentStatus(reservation: Reservation, payments: any[]): string {
+  const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const requiredAmount = calculateRequiredAmount(reservation)
+
+  // Calcular el importe pendiente con precisión de 2 decimales
+  const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
+
+  // Si no hay importe requerido, considerar como pagado
+  if (requiredAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si no hay importe pendiente o es exactamente 0, considerar como pagado
+  if (pendingAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si hay pagos pero no cubren el importe requerido
+  if (totalPayments > 0) {
+    return 'partial'
+  } 
+  // Si no hay pagos
+  else {
+    return 'pending'
+  }
+}
+
+/**
+ * Calcula el desglose completo de importes para una reserva
+ * @param reservation - Objeto de reserva
+ * @returns Objeto con todos los importes calculados
+ */
+export function calculateReservationAmounts(reservation: Reservation) {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+  const commissionIVA = totalCommissions * 0.21
+  const finalAmount = calculateRequiredAmount(reservation)
+
+  return {
+    totalAmount,
+    channelCommission,
+    collectionCommission,
+    totalCommissions,
+    commissionIVA,
+    finalAmount: Math.max(0, Math.round(finalAmount * 100) / 100)
+  }
+}
 
 /**
  * Get commission rates for a specific property and channel
@@ -1005,7 +615,7 @@ export async function getPropertyChannels(propertyId: string) {
 
     // Transform the data to match expected format
     if (data && Array.isArray(data)) {
-      const channels = data.map((item) => ({
+      const channels = data.map((item: any) => ({
         id: item.distribution_channels?.id || "unknown",
         name: item.distribution_channels?.name || "Unknown",
       }))

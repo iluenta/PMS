@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { supabase, isDemoMode, clearExpiredTokens } from "@/lib/supabase"
+import { supabase, clearExpiredTokens } from "@/lib/supabase"
 import {
   AuthUser,
   signInWithPassword,
@@ -23,15 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Mock user for demo mode
-const mockUser: AuthUser = {
-  id: "550e8400-e29b-41d4-a716-446655440000",
-  email: "demo@pms.com",
-  full_name: "Demo User",
-  role: "admin",
-  is_active: true,
-  last_login: new Date().toISOString(),
-}
+// demo mode removed
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -107,16 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true)
       setError(null)
 
-      if (isDemoMode) {
-        // Demo mode authentication
-        if (email === "demo@pms.com" && password === "demo123456") {
-          localStorage.setItem("demo-session", "active")
-          setUser(mockUser)
-          return
-        } else {
-          throw new Error("Credenciales de demo inválidas")
-        }
-      }
+      
 
       // Real authentication with Supabase
       const authUser = await signInWithPassword({ email, password })
@@ -136,11 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true)
       setError(null)
 
-      if (isDemoMode) {
-        localStorage.removeItem("demo-session")
-        setUser(null)
-        return
-      }
+      
 
       await signOutApi()
       setUser(null)
@@ -159,11 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true)
       setError(null)
 
-      if (isDemoMode) {
-        localStorage.setItem("demo-session", "active")
-        setUser(mockUser)
-        return
-      }
+      
 
       // Try to sign in with demo credentials in real Supabase
       await signIn("demo@pms.com", "demo123456")

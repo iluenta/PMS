@@ -107,8 +107,8 @@ export default function PropertyChannelCard({
             <div className="flex items-center gap-1 text-gray-600">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               <span>
-                {propertyChannel.property_rating > 0 
-                  ? `${propertyChannel.property_rating.toFixed(1)} (${propertyChannel.property_review_count} reseñas)`
+                {propertyChannel.property_rating && propertyChannel.property_rating > 0 
+                  ? `${propertyChannel.property_rating.toFixed(1)} (${propertyChannel.property_review_count || 0} reseñas)`
                   : "- (- reseñas)"
                 }
               </span>

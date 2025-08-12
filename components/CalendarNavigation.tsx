@@ -3,11 +3,10 @@
 import { Button } from "@/components/ui/button"
 import { 
   Calendar, 
-  List, 
-  BarChart3 
+  List
 } from "lucide-react"
 
-type ViewMode = 'calendar' | 'list' | 'statistics'
+type ViewMode = 'calendar' | 'list'
 
 interface CalendarNavigationProps {
   currentView: ViewMode
@@ -28,11 +27,6 @@ export default function CalendarNavigation({
       id: 'list' as ViewMode,
       label: 'Lista',
       icon: List
-    },
-    {
-      id: 'statistics' as ViewMode,
-      label: 'Estadísticas',
-      icon: BarChart3
     }
   ]
 

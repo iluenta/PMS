@@ -22,10 +22,13 @@ import {
   type Booking, 
   type Property, 
   type Guest, 
-  calculateBookingFinancials
+  type Reservation,
+  calculateRequiredAmount,
+  calculatePaymentStatus
 } from "@/lib/supabase"
 import { getPropertyChannels } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
+import { useProperty } from "@/hooks/useProperty"
 import { 
   Calendar, 
   Plus, 
@@ -43,8 +46,10 @@ import {
   Search,
   Filter,
   MessageSquare,
-  Trash2
+  Trash2,
+  DollarSign
 } from "lucide-react"
+import { GuestPicker } from '@/components/people/GuestPicker'
 
 export default function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -53,18 +58,26 @@ export default function Bookings() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
+  const [reservationPayments, setReservationPayments] = useState<{[key: string]: any[]}>({})
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [propertyFilter, setPropertyFilter] = useState<string>("all")
   const [channelFilter, setChannelFilter] = useState<string>("all")
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("pending")
   const [sortFilter, setSortFilter] = useState<string>("checkin_asc")
 
+  // Global property context
+  const { selectedProperty } = useProperty()
+
   // Filtered and sorted bookings
   const filteredBookings = useMemo(() => {
     let filtered = [...bookings]
+
+    // Filter by selected property (global context)
+    if (selectedProperty) {
+      filtered = filtered.filter((booking) => booking.property_id === selectedProperty.id)
+    }
 
     // Search filter (name, email, property)
     if (searchTerm.trim()) {
@@ -83,11 +96,6 @@ export default function Bookings() {
     // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((booking) => booking.status === statusFilter)
-    }
-
-    // Property filter
-    if (propertyFilter !== "all") {
-      filtered = filtered.filter((booking) => booking.property_id === propertyFilter)
     }
 
     // Channel filter
@@ -142,7 +150,7 @@ export default function Bookings() {
     })
 
     return filtered
-  }, [bookings, searchTerm, statusFilter, propertyFilter, channelFilter, dateRangeFilter, sortFilter])
+  }, [bookings, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter, selectedProperty])
 
   // Get unique channels for filter
   const availableChannels = useMemo(() => {
@@ -177,14 +185,14 @@ export default function Bookings() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [selectedProperty])
 
   const fetchData = async () => {
     try {
       console.log("🔄 Fetching reservations data...")
       
-      // Fetch reservations data with property_channel information
-      const { data: reservationsData, error: reservationsError } = await supabase
+      // Build query based on selected property
+      let query = supabase
         .from("reservations")
         .select(`
           *,
@@ -194,6 +202,14 @@ export default function Bookings() {
           )
         `)
         .order("created_at", { ascending: false })
+
+      // Filter by selected property if available
+      if (selectedProperty) {
+        query = query.eq("property_id", selectedProperty.id)
+        console.log("🎯 Filtering reservations for property:", selectedProperty.name, "ID:", selectedProperty.id)
+      }
+
+      const { data: reservationsData, error: reservationsError } = await query
 
       console.log("📊 Reservations data:", reservationsData)
       console.log("❌ Reservations error:", reservationsError)
@@ -207,18 +223,9 @@ export default function Bookings() {
       console.log("🏠 Properties data:", propertiesData)
       console.log("❌ Properties error:", propertiesError)
 
-            if (reservationsData) {
+      if (reservationsData) {
         // Transform reservations data to match our Booking interface
         const transformedReservations = reservationsData.map((reservation) => {
-          // Debug: Log the reservation data to understand the structure
-          console.log("🔍 Processing reservation:", {
-            id: reservation.id,
-            property_channels: reservation.property_channels,
-            channel: reservation.property_channels?.channel,
-            external_source: reservation.external_source,
-            external_id: reservation.external_id
-          })
-          
           // Determine booking_source with better logic
           let bookingSource = 'Direct' // Default
           if (reservation.property_channels?.channel?.name) {
@@ -226,8 +233,6 @@ export default function Bookings() {
           } else if (reservation.external_source) {
             bookingSource = reservation.external_source
           }
-          
-          console.log("🔍 Determined booking_source:", bookingSource)
           
           return {
             ...reservation,
@@ -238,6 +243,8 @@ export default function Bookings() {
             // Ensure commission fields are properly included
             channel_commission: reservation.channel_commission || 0,
             collection_commission: reservation.collection_commission || 0,
+            // Include payment_status from reservation
+            payment_status: reservation.payment_status || 'pending',
             // Transform the JSONB guest field to match expected structure
             property: null, // We'll handle this separately
             guest: reservation.guest ? {
@@ -255,12 +262,68 @@ export default function Bookings() {
             } : null
           }
         })
+        
+        console.log("✅ Transformed reservations count:", transformedReservations.length)
+        
+        // Log específico para debugging - mostrar los primeros 3 registros
+        if (transformedReservations.length > 0) {
+          console.log("🔍 Sample reservation data:", transformedReservations.slice(0, 3).map(r => ({
+            id: r.id,
+            booking_source: r.booking_source,
+            total_amount: r.total_amount,
+            channel_commission: r.channel_commission,
+            collection_commission: r.collection_commission,
+            guest_name: r.guest ? `${r.guest.first_name} ${r.guest.last_name}` : 'No guest'
+          })))
+        }
+        
         setBookings(transformedReservations)
       }
       
       if (propertiesData) setProperties(propertiesData)
       // No longer fetch guests since we don't use that table
       setGuests([]) // Set empty array since we handle guest data differently
+
+      // Fetch payments for each reservation
+      if (reservationsData && reservationsData.length > 0) {
+        const paymentsMap: {[key: string]: any[]} = {}
+        
+        for (const reservation of reservationsData) {
+          // Obtener todos los pagos para esta reserva
+          const { data: allPaymentsData, error: paymentsError } = await supabase
+            .from("payments")
+            .select("*")
+            .eq("reservation_id", reservation.id)
+          
+          // Usar solo pagos completados para el cálculo
+          const validPayments = allPaymentsData?.filter(p => p.status === 'completed') || []
+          
+          if (validPayments.length > 0) {
+            paymentsMap[reservation.id] = validPayments
+            console.log("💰 Found", validPayments.length, "valid payments for reservation", reservation.id, ":", validPayments.map(p => ({ id: p.id, amount: p.amount, status: p.status })))
+          } else {
+            paymentsMap[reservation.id] = []
+            console.log("⚠️ No valid payments found for reservation", reservation.id)
+          }
+        }
+        
+        console.log("📊 Payments map created with", Object.keys(paymentsMap).length, "reservations")
+        
+        // Log específico para debugging - mostrar los pagos encontrados
+        const paymentsWithData = Object.entries(paymentsMap).filter(([id, payments]) => payments.length > 0)
+        if (paymentsWithData.length > 0) {
+          console.log("🔍 Sample payments data:", paymentsWithData.slice(0, 3).map(([id, payments]) => ({
+            reservation_id: id,
+            payments_count: payments.length,
+            total_amount: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
+            payments: payments.map(p => ({ id: p.id, amount: p.amount, status: p.status }))
+          })))
+        } else {
+          console.log("⚠️ No payments found for any reservations")
+        }
+        
+        setReservationPayments(paymentsMap)
+      }
 
       // If no data exists, show information about it
       if (!reservationsData || reservationsData.length === 0) {
@@ -307,6 +370,32 @@ export default function Bookings() {
     }
   }
 
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800 hover:bg-green-200"
+      case "partial":
+        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+      case "pending":
+        return "bg-red-100 text-red-800 hover:bg-red-200"
+      default:
+        return "bg-gray-100 text-gray-800 hover:bg-gray-200"
+    }
+  }
+
+  const getPaymentStatusIcon = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <CheckCircle className="h-3 w-3" />
+      case "pending":
+        return <Clock className="h-3 w-3" />
+      case "partial":
+        return <AlertCircle className="h-3 w-3" />
+      default:
+        return <Clock className="h-3 w-3" />
+    }
+  }
+
   const handleEdit = (booking: Booking) => {
     setEditingBooking(booking)
     setIsDialogOpen(true)
@@ -320,21 +409,21 @@ export default function Bookings() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
       try {
-        const { error } = await supabase
-                  .from("reservations")
-        .delete()
-          .eq("id", id)
         
+
+        const { error } = await supabase
+          .from("reservations")
+          .delete()
+          .eq("id", id)
+
         if (error) {
-          console.error("❌ Error deleting reservation:", error)
-          alert(`Error al eliminar la reserva: ${error.message}`)
+          console.error("Error deleting booking:", error)
         } else {
-          console.log("✅ Reservation deleted successfully")
-          fetchData() // Refresh the list
+          console.log("Booking deleted successfully")
+          fetchData()
         }
       } catch (error) {
-        console.error("💥 Error deleting reservation:", error)
-        alert("Error desconocido al eliminar la reserva.")
+        console.error("Error deleting booking:", error)
       }
     }
   }
@@ -342,8 +431,64 @@ export default function Bookings() {
   const calculateNights = (checkIn: string, checkOut: string) => {
     const start = new Date(checkIn)
     const end = new Date(checkOut)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  // Función unificada para calcular el importe requerido y estado del pago
+  const calculatePaymentInfo = (booking: Booking, payments: any[] = []) => {
+    // Convertir Booking a Reservation para usar las funciones comunes
+    const reservation: Reservation = {
+      id: booking.id || '',
+      guest: booking.guest ? {
+        name: `${booking.guest.first_name} ${booking.guest.last_name}`,
+        email: booking.guest.email || '',
+        phone: booking.guest.phone || '',
+      } : {},
+      property_id: booking.property_id,
+      check_in: booking.check_in,
+      check_out: booking.check_out,
+      nights: calculateNights(booking.check_in, booking.check_out),
+      guests: booking.guests_count || 0,
+      adults: booking.guests_count || 0,
+      children: 0,
+      status: booking.status,
+      payment_status: booking.payment_status || 'pending',
+      total_amount: booking.total_amount || 0,
+      base_amount: booking.total_amount || 0,
+      cleaning_fee: 0,
+      taxes: 0,
+      channel: booking.booking_source,
+      notes: booking.notes || '',
+      special_requests: booking.special_requests || '',
+      external_id: (booking as any).external_id || '',
+      external_source: booking.booking_source || '',
+      ical_uid: '',
+      channel_commission: booking.channel_commission || 0,
+      collection_commission: booking.collection_commission || 0,
+      property_channel_id: '',
+      created_at: booking.created_at,
+      updated_at: booking.updated_at,
+      property: booking.property,
+      property_channel: undefined
+    }
+
+    // Calcular importe requerido y estado del pago usando las funciones centralizadas
+    const requiredAmount = calculateRequiredAmount(reservation)
+    const completedPayments = (payments || []).filter(p => p?.status === 'completed')
+    const totalPayments = completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+    const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
+
+    // Derivar el estado del pago usando exactamente los mismos valores mostrados
+    let paymentStatus = 'pending'
+    if (requiredAmount <= 0 || pendingAmount <= 0) paymentStatus = 'paid'
+    else if (totalPayments > 0) paymentStatus = 'partial'
+
+    return {
+      requiredAmount,
+      paymentStatus,
+      totalPayments,
+      pendingAmount: Math.max(0, pendingAmount)
+    }
   }
 
   if (loading) {
@@ -374,6 +519,8 @@ export default function Bookings() {
             guests={guests}
             onClose={() => setIsDialogOpen(false)}
             onSave={fetchData}
+            reservationPayments={reservationPayments}
+            calculatePaymentInfo={calculatePaymentInfo}
           />
         </Dialog>
       </div>
@@ -414,24 +561,6 @@ export default function Bookings() {
                 <SelectItem value="pending">Pendientes</SelectItem>
                 <SelectItem value="cancelled">Canceladas</SelectItem>
                 <SelectItem value="completed">Completadas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Propiedad */}
-          <div className="space-y-2">
-            <Label htmlFor="property">Propiedad</Label>
-            <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las propiedades" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las propiedades</SelectItem>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.name}
-                  </SelectItem>
-                ))}
               </SelectContent>
             </Select>
           </div>
@@ -560,138 +689,82 @@ export default function Bookings() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBookings.map((booking) => (
-          <Card key={booking.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <Badge className={`${getStatusColor(booking.status)} text-xs`}>
-                    <div className="flex items-center space-x-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredBookings.map((booking) => {
+          const paymentsForBooking = reservationPayments?.[booking.id]
+          const paymentStatusToShow = paymentsForBooking === undefined
+            ? (booking.payment_status || 'pending')
+            : calculatePaymentInfo(booking, paymentsForBooking).paymentStatus
+          return (
+            <Card key={booking.id} className="p-4 hover:shadow-md transition-shadow">
+              <div className="flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-6 w-6 text-blue-600" />
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">
+                        {booking.guest?.first_name} {booking.guest?.last_name}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        {new Date(booking.check_in).toLocaleDateString()} – {new Date(booking.check_out).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className={`${getStatusColor(booking.status)} rounded-full`}>
+                    <span className="inline-flex items-center gap-1">
                       {getStatusIcon(booking.status)}
                       <span className="capitalize">{booking.status}</span>
-                    </div>
+                    </span>
                   </Badge>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(booking)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(booking.id!)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
 
-              <div className="space-y-3">
-                <div>
-                  <h3 className="font-semibold text-lg text-gray-900">
-                    {booking.guest?.first_name} {booking.guest?.last_name}
-                  </h3>
-                  <div className="flex items-center text-sm text-gray-600 mt-1">
-                    <Building2 className="h-4 w-4 mr-1" />
-                    <span>{booking.property?.name}</span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    <p>{booking.booking_source}</p>
-                    {(booking as any).external_id && (
-                      <p className="text-xs text-blue-600">ID: {(booking as any).external_id}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-700">Check-in</p>
-                    <p className="text-gray-600">
-                      {new Date(booking.check_in).toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                <div className="flex items-center justify-between">
+                  <div className="text-left">
+                    <p className="text-lg font-semibold text-gray-900">
+                      €{(booking.total_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {booking.property?.name || ''}{booking.booking_source ? ` • ${booking.booking_source}` : ''}
                     </p>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-700">Check-out</p>
-                    <p className="text-gray-600">
-                      {new Date(booking.check_out).toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-sm">
-                  <p className="font-medium text-gray-700">Duración</p>
-                  <p className="text-gray-600">{calculateNights(booking.check_in, booking.check_out)} noches</p>
-                </div>
-
-                <div className="border-t pt-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Total</span>
-                    <span className="text-lg font-semibold text-green-600">
-                      €{(booking.total_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                  <Badge className={`${getPaymentStatusColor(paymentStatusToShow)} rounded-full`}>
+                    <span className="inline-flex items-center gap-1">
+                      {getPaymentStatusIcon(paymentStatusToShow)}
+                      <span className="capitalize">{paymentStatusToShow}</span>
                     </span>
-                  </div>
-                  
-                  {(booking.commission_amount || booking.channel_commission || booking.collection_commission || booking.net_amount) && (
-                    <div className="mt-2 space-y-1 text-sm">
-                      {booking.commission_amount && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Comisión</span>
-                          <span className="text-orange-600">
-                            €{(booking.commission_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })} 
-                            {booking.commission_rate && ` (${booking.commission_rate}%)`}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Venta</span>
-                        <span className="text-orange-600">€{(booking.channel_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Comisión Cobro</span>
-                        <span className="text-red-600">€{(booking.collection_commission || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                      </div>
-                      {booking.net_amount && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Neto</span>
-                          <span className="text-green-600">€{(booking.net_amount || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  </Badge>
                 </div>
 
-                {/* Solicitudes Especiales y Notas */}
-                {(booking.special_requests || booking.notes) && (
-                  <div className="border-t pt-3 space-y-2">
-                    {booking.special_requests && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-700">Solicitudes Especiales</p>
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.special_requests}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {booking.notes && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-700">Notas</p>
-                        <div className="p-2 bg-gray-50 border border-gray-200 rounded-md">
-                          <p className="text-xs text-gray-800 whitespace-pre-wrap">{booking.notes}</p>
-                        </div>
-                      </div>
-                    )}
+                {(booking.special_requests || (booking as any).notes) && (
+                  <div className="p-2 bg-gray-50 rounded">
+                    <p className="text-xs text-gray-600 line-clamp-3">
+                      {booking.special_requests || (booking as any).notes}
+                    </p>
                   </div>
                 )}
+
+                <div className="flex justify-end space-x-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(booking)}
+                    className="h-8 px-2"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(booking.id!)}
+                    className="h-8 px-2"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
       </div>
 
       {filteredBookings.length === 0 && (
@@ -717,13 +790,23 @@ function BookingDialog({
   guests,
   onClose,
   onSave,
+  reservationPayments,
+  calculatePaymentInfo,
 }: {
   booking: Booking | null
   properties: Property[]
   guests: Guest[]
   onClose: () => void
   onSave: () => void
+  reservationPayments?: {[key: string]: any[]}
+  calculatePaymentInfo: (booking: Booking, payments?: any[]) => { 
+    requiredAmount: number; 
+    paymentStatus: string; 
+    totalPayments: number; 
+    pendingAmount: number 
+  }
 }) {
+  const { selectedProperty } = useProperty()
   const [formData, setFormData] = useState({
     property_id: "",
     guest_name: "",
@@ -759,11 +842,42 @@ function BookingDialog({
   const [commissionPercentages, setCommissionPercentages] = useState<{
     sale: number | null;
     charge: number | null;
-  }>({ sale: null, charge: null })
+  }>({ sale: null, charge: null   })
+
+  // Funciones para el estado del pago
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "partial":
+        return "bg-blue-100 text-blue-800"
+      case "refunded":
+        return "bg-gray-100 text-gray-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getPaymentStatusIcon = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <CheckCircle className="h-3 w-3" />
+      case "pending":
+        return <Clock className="h-3 w-3" />
+      case "partial":
+        return <DollarSign className="h-3 w-3" />
+      case "refunded":
+        return <AlertCircle className="h-3 w-3" />
+      default:
+        return <Clock className="h-3 w-3" />
+    }
+  }
 
   useEffect(() => {
     if (booking) {
-
+      // Editing existing booking - use property from booking
       const formDataToSet = {
         property_id: booking.property_id,
         guest_name: booking.guest ? `${booking.guest.first_name} ${booking.guest.last_name}`.trim() : "",
@@ -796,8 +910,10 @@ function BookingDialog({
       })
       setFormData(formDataToSet)
     } else {
+      // Creating new booking - use selected property from context
+      const propertyId = selectedProperty?.id || ""
       setFormData({
-        property_id: "",
+        property_id: propertyId,
         guest_name: "",
         guest_email: "",
         guest_phone: "",
@@ -823,7 +939,7 @@ function BookingDialog({
         collection_commission: 0,
       })
     }
-  }, [booking])
+  }, [booking, selectedProperty])
 
   // Load available channels when property changes
   useEffect(() => {
@@ -901,15 +1017,7 @@ function BookingDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar que se haya seleccionado una propiedad (PRIMERO - orden de campos en pantalla)
-    if (!formData.property_id) {
-      setPropertyError("Completa este campo")
-      return
-    } else {
-      setPropertyError("")
-    }
-
-    // Validar fechas después de validar propiedad
+    // Validar fechas
     if (formData.check_in && formData.check_out) {
       const start = new Date(formData.check_in)
       const end = new Date(formData.check_out)
@@ -927,6 +1035,41 @@ function BookingDialog({
     }
 
     try {
+      // Vinculación con people: si ya hay person_id, ACTUALIZAR ese registro; si no, crear
+      let personId: string | null = (formData as any).person_id || null
+      const picked = (formData as any)._picked_person as any | undefined
+      if (personId) {
+        // Actualizar con los datos del formulario (idempotente si no hay cambios)
+        try {
+          const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
+          const peopleApi = await import('@/lib/peopleService')
+          const updated = await peopleApi.updatePerson(personId, {
+            first_name: first || undefined,
+            last_name: rest.join(' ') || undefined,
+            email: formData.guest_email || undefined,
+            phone: formData.guest_phone || undefined,
+            country: formData.guest_country || undefined,
+          } as any)
+          ;(formData as any)._picked_person = updated
+        } catch (e) {
+          console.warn('No se pudo actualizar el huésped seleccionado:', e)
+        }
+      } else if (formData.guest_name || formData.guest_email || formData.guest_phone) {
+        // Crear persona mínima si no hay id
+        try {
+          const [first, ...rest] = (formData.guest_name || '').trim().split(' ')
+          const created = await (await import('@/lib/peopleService')).createPerson({
+            person_type: 'guest',
+            first_name: first || '',
+            last_name: rest.join(' ') || '',
+            email: formData.guest_email || undefined,
+            phone: formData.guest_phone || undefined,
+            country: formData.guest_country || undefined,
+          })
+          personId = created.id
+          ;(formData as any)._picked_person = created
+        } catch {}
+      }
       // Prepare guest data as JSONB
       const guestData = {
         name: `${formData.guest_name}`,
@@ -1067,7 +1210,8 @@ function BookingDialog({
         channel_commission: formData.channel_commission,
         collection_commission: formData.collection_commission,
         external_source: formData.booking_source,
-        external_id: formData.external_id || null
+        external_id: formData.external_id || null,
+        person_id: personId
       }
 
       // Ensure we have a valid property_channel_id
@@ -1337,18 +1481,29 @@ function BookingDialog({
           {/* Sección Izquierda: Información del Huésped */}
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Información del Huésped</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
-                <Input
-                  id="guest_name"
-                  value={formData.guest_name}
-                  onChange={(e) => setFormData({ ...formData, guest_name: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
-                  required
-                  className="h-10"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="guest_name" className="text-sm font-medium text-gray-700">Nombre completo *</Label>
+                  {/* GuestPicker: autocompletar desde people */}
+                  <GuestPicker
+                    value={{ name: formData.guest_name, email: formData.guest_email || '', phone: formData.guest_phone || '', personId: (formData as any).person_id || (formData as any)._picked_person?.id }}
+                    onChange={(val, picked) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        guest_name: val.name,
+                        guest_email: val.email || '',
+                        guest_phone: val.phone || '',
+                        person_id: val.personId || (prev as any).person_id,
+                      }) as any)
+                      if (picked) {
+                        ;(formData as any)._picked_person = picked
+                      } else {
+                        // Si el usuario está tecleando y no selecciona, no mantengamos un picked anterior
+                        delete (formData as any)._picked_person
+                      }
+                    }}
+                  />
+                </div>
               
               <div className="space-y-2">
                 <Label htmlFor="guest_email" className="text-sm font-medium text-gray-700">Email</Label>
@@ -1393,39 +1548,14 @@ function BookingDialog({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="property_id" className="text-sm font-medium text-gray-700">Propiedad *</Label>
-                <Select
-                  value={formData.property_id}
-                  onValueChange={(value) => {
-                    setFormData({ ...formData, property_id: value })
-                    // Limpiar error cuando se selecciona una propiedad
-                    if (propertyError) setPropertyError("")
-                  }}
-                >
-                  <SelectTrigger className={`h-10 ${propertyError ? 'border-red-500' : ''}`}>
-                    <SelectValue placeholder="Selecciona una propiedad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Mostrar error de validación de propiedad */}
-                {propertyError && (
-                  <div className="relative">
-                    <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm z-10">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 bg-orange-500 rounded flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">!</span>
-                        </div>
-                        <span className="text-gray-700 text-sm">{propertyError}</span>
-                      </div>
-                      <div className="absolute top-0 left-4 transform -translate-y-1/2 w-2 h-2 bg-white border-l border-t border-gray-200 rotate-45"></div>
-                    </div>
-                  </div>
-                )}
+                <div className="h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center">
+                  <span className="text-gray-600 text-sm">
+                    {booking 
+                      ? properties.find(p => p.id === booking.property_id)?.name || "Propiedad no encontrada"
+                      : selectedProperty?.name || "No hay propiedad seleccionada"
+                    }
+                  </span>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -1567,17 +1697,41 @@ function BookingDialog({
               
               <div className="space-y-2">
                 <Label htmlFor="payment_status" className="text-sm font-medium text-gray-700">Estado de pago</Label>
-                <Select value={formData.payment_status || "pending"} onValueChange={(value) => setFormData({ ...formData, payment_status: value })}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
-                    <SelectItem value="partial">Pago Parcial</SelectItem>
-                    <SelectItem value="refunded">Reembolsado</SelectItem>
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  // Usar el mismo cálculo unificado que en la tarjeta para evitar desajustes
+                  const status = booking ? (() => {
+                    const currentBooking = {
+                      ...booking,
+                      total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                      channel_commission: formData.channel_commission || 0,
+                      collection_commission: formData.collection_commission || 0,
+                      booking_source: formData.booking_source
+                    }
+                    const payments = reservationPayments?.[booking.id] || []
+                    return calculatePaymentInfo(currentBooking, payments).paymentStatus
+                  })() : 'pending'
+
+                  return (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="payment_status"
+                        value={status}
+                        readOnly
+                        className="h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
+                        disabled
+                      />
+                      <Badge className={`${getPaymentStatusColor(status)} text-xs`}>
+                        <div className="flex items-center space-x-1">
+                          {getPaymentStatusIcon(status)}
+                          <span className="capitalize">{status}</span>
+                        </div>
+                      </Badge>
+                    </div>
+                  )
+                })()}
+                <div className="text-xs text-gray-500">
+                  El estado del pago se calcula con los mismos importes que se muestran a la derecha
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -1739,12 +1893,55 @@ function BookingDialog({
                       )}
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Total (sin comisiones)</Label>
-                      <div className="text-2xl font-bold text-gray-900">
-                        €{((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                      </div>
-                    </div>
+                    {/* Sección de Total, Importe pagado y Importe pendiente */}
+                    {booking && (() => {
+                      const currentBooking = {
+                        ...booking,
+                        total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                        channel_commission: formData.channel_commission || 0,
+                        collection_commission: formData.collection_commission || 0,
+                        booking_source: formData.booking_source
+                      }
+                      
+                      const { requiredAmount, paymentStatus, totalPayments, pendingAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
+                      
+                      return (
+                        <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
+                          {/* Total */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Total</Label>
+                              <div className="text-xs text-gray-500">(Sin comisiones)</div>
+                            </div>
+                            <div className="text-xl font-bold text-gray-900 text-center">
+                              €{currentBooking.total_amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                          
+                          {/* Importe pagado */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                              <div className="text-xs text-gray-500">pagado</div>
+                            </div>
+                            <div className="text-xl font-bold text-green-600 text-center">
+                              €{totalPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                          
+                          {/* Importe pendiente */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="text-center">
+                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                              <div className="text-xs text-gray-500">pendiente</div>
+                            </div>
+                            <div className="text-xl font-bold text-orange-600 text-center">
+                              €{pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
         </div>

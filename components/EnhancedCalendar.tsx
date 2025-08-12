@@ -3,18 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { 
-  ChevronLeft, 
-  ChevronRight,
-  CheckCircle,
-  Clock,
-  User,
-  X,
-  ArrowRight,
-  ArrowLeft,
-  Euro
-} from "lucide-react"
 import { supabase, type Property, type Reservation } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
 
 interface CalendarBooking {
   id: string
@@ -36,17 +26,12 @@ interface DayInfo {
   guestName?: string
   isCheckIn?: boolean
   isCheckOut?: boolean
+  checkInGuestName?: string
+  checkOutGuestName?: string
 }
 
-interface EnhancedCalendarProps {
-  selectedPropertyId: string
-  selectedProperty?: Property | null
-}
-
-export default function EnhancedCalendar({ 
-  selectedPropertyId, 
-  selectedProperty 
-}: EnhancedCalendarProps) {
+export default function EnhancedCalendar() {
+  const { selectedProperty } = useProperty()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [bookings, setBookings] = useState<CalendarBooking[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,13 +44,15 @@ export default function EnhancedCalendar({
   const dayNames = ["L", "M", "X", "J", "V", "S", "D"]
 
   useEffect(() => {
-    if (selectedPropertyId) {
+    if (selectedProperty) {
       fetchBookings()
     }
-  }, [selectedPropertyId])
+  }, [selectedProperty])
 
   const fetchBookings = async () => {
     try {
+      if (!selectedProperty) return
+      
       setLoading(true)
       
       const { data: reservationsData, error } = await supabase
@@ -76,7 +63,8 @@ export default function EnhancedCalendar({
             channel:distribution_channels(*)
           )
         `)
-        .eq("property_id", selectedPropertyId)
+        .eq("property_id", selectedProperty.id)
+        .neq("status", "cancelled")
 
       if (error) throw error
 
@@ -126,7 +114,13 @@ export default function EnhancedCalendar({
       const checkOut = new Date(booking.check_out)
       const checkDate = new Date(date)
       
-      return checkDate >= checkIn && checkDate < checkOut
+      // Normalizar todas las fechas al inicio del día para comparación precisa
+      const normalizedCheckIn = new Date(checkIn.getFullYear(), checkIn.getMonth(), checkIn.getDate())
+      const normalizedCheckOut = new Date(checkOut.getFullYear(), checkOut.getMonth(), checkOut.getDate())
+      const normalizedCheckDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate())
+      
+      // La reserva incluye desde el día de check-in hasta el día de check-out (inclusivo)
+      return normalizedCheckDate >= normalizedCheckIn && normalizedCheckDate <= normalizedCheckOut
     })
   }
 
@@ -141,19 +135,42 @@ export default function EnhancedCalendar({
     let guestName: string | undefined
     let isCheckIn = false
     let isCheckOut = false
+    let price: number | undefined
+    let checkInGuestName: string | undefined
+    let checkOutGuestName: string | undefined
 
     if (bookingsForDate.length > 0) {
       const booking = bookingsForDate[0]
       status = booking.status === 'confirmed' ? 'reserved' : 'pending'
       guestName = booking.guest_name
       
-      // Verificar si es check-in o check-out
-      const checkInDate = new Date(booking.check_in)
-      const checkOutDate = new Date(booking.check_out)
-      const currentDate = new Date(date)
+      // Calcular precio por noche para la reserva
+      const checkIn = new Date(booking.check_in)
+      const checkOut = new Date(booking.check_out)
+      const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
+      const pricePerNight = nights > 0 ? booking.total_amount / nights : booking.total_amount
+      price = Number(pricePerNight.toFixed(2))
       
-      isCheckIn = currentDate.toDateString() === checkInDate.toDateString()
-      isCheckOut = currentDate.toDateString() === checkOutDate.toDateString()
+      // Verificar si es check-in o check-out para todas las reservas del día
+      const normalizedCurrentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      
+      for (const booking of bookingsForDate) {
+        const checkInDate = new Date(booking.check_in)
+        const checkOutDate = new Date(booking.check_out)
+        
+        // Normalizar fechas para comparación precisa
+        const normalizedCheckIn = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate())
+        const normalizedCheckOut = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate())
+        
+        if (normalizedCurrentDate.getTime() === normalizedCheckIn.getTime()) {
+          isCheckIn = true
+          checkInGuestName = booking.guest_name
+        }
+        if (normalizedCurrentDate.getTime() === normalizedCheckOut.getTime()) {
+          isCheckOut = true
+          checkOutGuestName = booking.guest_name
+        }
+      }
     } else if (isWeekend) {
       status = 'closed'
     }
@@ -162,10 +179,12 @@ export default function EnhancedCalendar({
       date,
       status,
       bookings: bookingsForDate,
-      price: selectedProperty?.base_price || 0,
+      price,
       guestName,
       isCheckIn,
-      isCheckOut
+      isCheckOut,
+      checkInGuestName,
+      checkOutGuestName
     }
   }
 
@@ -184,27 +203,12 @@ export default function EnhancedCalendar({
     }
   }
 
-  const getStatusIcon = (status: DayStatus) => {
-    switch (status) {
-      case 'available':
-        return <CheckCircle className="h-3 w-3 text-green-600" />
-      case 'reserved':
-        return <User className="h-3 w-3 text-blue-600" />
-      case 'pending':
-        return <Clock className="h-3 w-3 text-yellow-600" />
-      case 'closed':
-        return <X className="h-3 w-3 text-red-600" />
-      default:
-        return null
-    }
-  }
-
   const navigateQuarter = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate)
     if (direction === "prev") {
-      newDate.setMonth(newDate.getMonth() - 3)
+      newDate.setMonth(newDate.getMonth() - 2)
     } else {
-      newDate.setMonth(newDate.getMonth() + 3)
+      newDate.setMonth(newDate.getMonth() + 2)
     }
     setCurrentDate(newDate)
   }
@@ -244,9 +248,7 @@ export default function EnhancedCalendar({
                 key={index}
                 className={`p-2 h-20 border rounded-lg ${getStatusColors(dayInfo.status)} ${
                   isToday ? "ring-2 ring-blue-500" : ""
-                } overflow-hidden relative ${
-                  !isCurrentMonth ? "opacity-50" : ""
-                }`}
+                } overflow-hidden relative`}
               >
                 {/* Day number */}
                 <div className={`text-sm font-medium mb-1 ${isToday ? "text-blue-600" : "text-gray-900"}`}>
@@ -254,22 +256,16 @@ export default function EnhancedCalendar({
                 </div>
 
                 {/* Price indicator */}
-                {dayInfo.price && (
+                {dayInfo.price !== undefined && dayInfo.guestName && (
                   <div className="absolute top-1 right-1">
                     <div className="flex items-center space-x-1 bg-white/80 backdrop-blur-sm px-1 py-0.5 rounded text-xs font-medium text-gray-700">
-                      <Euro className="h-3 w-3" />
                       <span>€{dayInfo.price}</span>
                     </div>
                   </div>
                 )}
 
-                {/* Status indicator */}
-                <div className="flex items-center space-x-1 mb-1">
-                  {getStatusIcon(dayInfo.status)}
-                </div>
-
-                {/* Guest information */}
-                {dayInfo.guestName && (
+                {/* Guest information - solo mostrar si no hay entrada/salida */}
+                {dayInfo.guestName && !dayInfo.isCheckIn && !dayInfo.isCheckOut && (
                   <div className="text-xs text-gray-600 mb-1 truncate">
                     {dayInfo.guestName}
                   </div>
@@ -277,17 +273,15 @@ export default function EnhancedCalendar({
 
                 {/* Check-in/Check-out indicators */}
                 {(dayInfo.isCheckIn || dayInfo.isCheckOut) && (
-                  <div className="flex items-center space-x-1">
-                    {dayInfo.isCheckIn && (
-                      <div className="flex items-center space-x-1">
-                        <ArrowRight className="h-3 w-3 text-green-600" />
-                        <span className="text-xs text-green-600 font-medium">Entrada</span>
-                      </div>
-                    )}
+                  <div className="flex flex-col space-y-1">
                     {dayInfo.isCheckOut && (
                       <div className="flex items-center space-x-1">
-                        <ArrowLeft className="h-3 w-3 text-orange-600" />
-                        <span className="text-xs text-orange-600 font-medium">Salida</span>
+                        <span className="text-xs text-red-600 font-medium truncate">{dayInfo.checkOutGuestName || 'Desconocido'}</span>
+                      </div>
+                    )}
+                    {dayInfo.isCheckIn && (
+                      <div className="flex items-center space-x-1">
+                        <span className="text-xs text-green-600 font-medium truncate">{dayInfo.checkInGuestName || 'Desconocido'}</span>
                       </div>
                     )}
                   </div>
@@ -317,28 +311,22 @@ export default function EnhancedCalendar({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center">
-            Vista de 3 Meses
-            {selectedProperty && (
-              <span className="ml-2 text-sm font-normal text-gray-600">
-                - {selectedProperty.name}
-              </span>
-            )}
+            Vista de 2 Meses
           </CardTitle>
           <div className="flex space-x-2">
             <Button variant="outline" size="sm" onClick={() => navigateQuarter("prev")}>
-              <ChevronLeft className="h-4 w-4" />
+              Anterior
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigateQuarter("next")}>
-              <ChevronRight className="h-4 w-4" />
+              Siguiente
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {renderMonth(0)}
           {renderMonth(1)}
-          {renderMonth(2)}
         </div>
 
         {/* Legend */}

@@ -5,6 +5,7 @@ export interface DistributionChannel {
   logo?: string
   created_at: string
   updated_at: string
+  person_id?: string | null
 }
 
 // Tipos para configuración de canal por propiedad
@@ -20,8 +21,8 @@ export interface PropertyChannel {
   external_place_id?: string
   listing_url?: string
   review_url?: string
-  property_rating: number
-  property_review_count: number
+  property_rating?: number
+  property_review_count?: number
   last_rating_update?: string
   price_adjustment_percentage: number
   commission_override_charge?: number
@@ -36,11 +37,13 @@ export interface PropertyChannel {
 export interface CreateChannelData {
   name: string
   logo?: string
+  person_id?: string | null
 }
 
 export interface UpdateChannelData {
   name?: string
   logo?: string
+  person_id?: string | null
 }
 
 export interface CreatePropertyChannelData {

@@ -1,4 +1,4 @@
-import { supabase, isDemoMode } from "./supabase"
+import { supabase } from "./supabase"
 import type { 
   DistributionChannel, 
   PropertyChannel,
@@ -9,98 +9,7 @@ import type {
   UpdatePropertyChannelData
 } from "@/types/channels"
 
-// Mock data for demo mode - Canales globales
-const mockChannels: DistributionChannel[] = [
-  {
-    id: "1",
-    name: "Booking.com",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Booking.com_logo.svg/2560px-Booking.com_logo.svg.png",
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z"
-  },
-  {
-    id: "2",
-    name: "Airbnb",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Airbnb_Logo_B%C3%A9lo.svg/2560px-Airbnb_Logo_B%C3%A9lo.svg.png",
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z"
-  },
-  {
-    id: "3",
-    name: "Expedia",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Expedia_logo.svg/2560px-Expedia_logo.svg.png",
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z"
-  },
-  {
-    id: "4",
-    name: "Canal Directo",
-    logo: "https://via.placeholder.com/200x80/3B82F6/FFFFFF?text=Canal+Directo",
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z"
-  }
-]
-
-// Mock data for demo mode - Configuración por propiedad
-const mockPropertyChannels: PropertyChannel[] = [
-  {
-    id: "1",
-    property_id: "1",
-    channel_id: "1",
-    is_enabled: true,
-    listing_url: "https://booking.com/property1",
-    external_property_id: "booking-123",
-    commission_override_charge: 15,
-    commission_override_sale: 0,
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z",
-    sync_enabled: true,
-    auto_update_ratings: false,
-    property_rating: 0,
-    property_review_count: 0,
-    price_adjustment_percentage: 0,
-    availability_sync_enabled: true,
-    instant_booking_enabled: false,
-  },
-  {
-    id: "2",
-    property_id: "1",
-    channel_id: "2",
-    is_enabled: true,
-    listing_url: "https://airbnb.com/property1",
-    external_property_id: "airbnb-456",
-    commission_override_charge: 12,
-    commission_override_sale: 3,
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z",
-    sync_enabled: true,
-    auto_update_ratings: false,
-    property_rating: 0,
-    property_review_count: 0,
-    price_adjustment_percentage: 0,
-    availability_sync_enabled: true,
-    instant_booking_enabled: false,
-  },
-  {
-    id: "3",
-    property_id: "2",
-    channel_id: "1",
-    is_enabled: true,
-    listing_url: "https://booking.com/property2",
-    external_property_id: "booking-789",
-    commission_override_charge: 18,
-    commission_override_sale: 0,
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z",
-    sync_enabled: true,
-    auto_update_ratings: false,
-    property_rating: 0,
-    property_review_count: 0,
-    price_adjustment_percentage: 0,
-    availability_sync_enabled: true,
-    instant_booking_enabled: false,
-  }
-]
+// demo data removed
 
 /**
  * Upload a logo to Supabase Storage and return the public URL
@@ -146,9 +55,6 @@ async function deleteLogo(logoUrl: string): Promise<void> {
  */
 export async function getChannels(): Promise<DistributionChannel[]> {
   try {
-    if (isDemoMode) {
-      return mockChannels
-    }
 
     const { data, error } = await supabase
       .from("distribution_channels")
@@ -172,9 +78,6 @@ export async function getChannels(): Promise<DistributionChannel[]> {
  */
 export async function getChannel(id: string): Promise<DistributionChannel | null> {
   try {
-    if (isDemoMode) {
-      return mockChannels.find(channel => channel.id === id) || null
-    }
 
     const { data, error } = await supabase
       .from("distribution_channels")
@@ -199,17 +102,6 @@ export async function getChannel(id: string): Promise<DistributionChannel | null
  */
 export async function createChannel(channelData: CreateChannelData, logoFile?: File): Promise<DistributionChannel> {
   try {
-    if (isDemoMode) {
-      const newChannel: DistributionChannel = {
-        id: Date.now().toString(),
-        name: channelData.name,
-        logo: logoFile ? URL.createObjectURL(logoFile) : undefined,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      mockChannels.push(newChannel)
-      return newChannel
-    }
 
     let logoUrl: string | undefined = undefined
     if (logoFile) {
@@ -241,19 +133,6 @@ export async function createChannel(channelData: CreateChannelData, logoFile?: F
  */
 export async function updateChannel(id: string, channelData: UpdateChannelData, logoFile?: File, deleteExistingLogo = false): Promise<DistributionChannel> {
   try {
-    if (isDemoMode) {
-      const channelIndex = mockChannels.findIndex(channel => channel.id === id)
-      if (channelIndex === -1) {
-        throw new Error("Canal no encontrado")
-      }
-      mockChannels[channelIndex] = {
-        ...mockChannels[channelIndex],
-        ...channelData,
-        logo: logoFile ? URL.createObjectURL(logoFile) : (deleteExistingLogo ? undefined : mockChannels[channelIndex].logo),
-        updated_at: new Date().toISOString()
-      }
-      return mockChannels[channelIndex]
-    }
 
     const { data: existingChannel, error: fetchError } = await supabase
       .from("distribution_channels")
@@ -305,15 +184,6 @@ export async function updateChannel(id: string, channelData: UpdateChannelData, 
  */
 export async function deleteChannel(id: string): Promise<void> {
   try {
-    if (isDemoMode) {
-      const channelIndex = mockChannels.findIndex(channel => channel.id === id)
-      if (channelIndex === -1) {
-        throw new Error("Canal no encontrado")
-      }
-      
-      mockChannels.splice(channelIndex, 1)
-      return
-    }
     
     // First, get the logo URL to delete it from storage
     const { data: existingChannel, error: fetchError } = await supabase
@@ -351,13 +221,6 @@ export async function deleteChannel(id: string): Promise<void> {
  */
 export async function getPropertyChannels(propertyId: string): Promise<PropertyChannelWithDetails[]> {
   try {
-    if (isDemoMode) {
-      const propertyChannels = mockPropertyChannels.filter(pc => pc.property_id === propertyId)
-      return propertyChannels.map(pc => ({
-        ...pc,
-        channel: mockChannels.find(c => c.id === pc.channel_id)
-      }))
-    }
 
     const { data, error } = await supabase
       .from("property_channels")
@@ -385,29 +248,6 @@ export async function getPropertyChannels(propertyId: string): Promise<PropertyC
  */
 export async function createPropertyChannel(channelData: CreatePropertyChannelData): Promise<PropertyChannel> {
   try {
-    if (isDemoMode) {
-      const newPropertyChannel: PropertyChannel = {
-        id: Date.now().toString(),
-        property_id: channelData.property_id,
-        channel_id: channelData.channel_id,
-        is_enabled: channelData.is_enabled || false,
-        listing_url: channelData.listing_url || "",
-        external_property_id: channelData.external_property_id || "",
-        commission_override_charge: channelData.commission_override_charge || 0,
-        commission_override_sale: channelData.commission_override_sale || 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sync_enabled: channelData.sync_enabled || true,
-        auto_update_ratings: channelData.auto_update_ratings || false,
-        property_rating: 0,
-        property_review_count: 0,
-        price_adjustment_percentage: channelData.price_adjustment_percentage || 0,
-        availability_sync_enabled: channelData.availability_sync_enabled || true,
-        instant_booking_enabled: channelData.instant_booking_enabled || false,
-      }
-      mockPropertyChannels.push(newPropertyChannel)
-      return newPropertyChannel
-    }
 
     const { data, error } = await supabase
       .from("property_channels")
@@ -432,19 +272,6 @@ export async function createPropertyChannel(channelData: CreatePropertyChannelDa
  */
 export async function updatePropertyChannel(id: string, channelData: UpdatePropertyChannelData): Promise<PropertyChannel> {
   try {
-    if (isDemoMode) {
-      const channelIndex = mockPropertyChannels.findIndex(pc => pc.id === id)
-      if (channelIndex > -1) {
-        mockPropertyChannels[channelIndex] = {
-          ...mockPropertyChannels[channelIndex],
-          ...channelData,
-          id: id,
-          updated_at: new Date().toISOString()
-        }
-        return mockPropertyChannels[channelIndex]
-      }
-      throw new Error("Property channel not found")
-    }
 
     const { data, error } = await supabase
       .from("property_channels")
@@ -473,15 +300,6 @@ export async function updatePropertyChannel(id: string, channelData: UpdatePrope
  */
 export async function deletePropertyChannel(id: string): Promise<void> {
   try {
-    if (isDemoMode) {
-      const channelIndex = mockPropertyChannels.findIndex(pc => pc.id === id)
-      if (channelIndex === -1) {
-        throw new Error("Configuración de canal no encontrada")
-      }
-      
-      mockPropertyChannels.splice(channelIndex, 1)
-      return
-    }
 
     const { error } = await supabase
       .from("property_channels")
@@ -503,16 +321,6 @@ export async function deletePropertyChannel(id: string): Promise<void> {
  */
 export async function togglePropertyChannelStatus(id: string, isEnabled: boolean): Promise<PropertyChannel> {
   try {
-    if (isDemoMode) {
-      const channelIndex = mockPropertyChannels.findIndex(pc => pc.id === id)
-      if (channelIndex === -1) {
-        throw new Error("Configuración de canal no encontrada")
-      }
-      
-      mockPropertyChannels[channelIndex].is_enabled = isEnabled
-      mockPropertyChannels[channelIndex].updated_at = new Date().toISOString()
-      return mockPropertyChannels[channelIndex]
-    }
 
     const { data, error } = await supabase
       .from("property_channels")

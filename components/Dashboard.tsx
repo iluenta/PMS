@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { supabase, isDemoMode, mockData, type Booking, type Property } from "@/lib/supabase"
+import { supabase, type Booking, type Property } from "@/lib/supabase"
 import {
   Building2,
   Calendar,
@@ -40,36 +40,7 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      if (isDemoMode) {
-        // Use mock data
-        const mockBookingsWithRelations = mockData.bookings.map((booking) => ({
-          ...booking,
-          property: mockData.properties.find((p) => p.id === booking.property_id),
-          guest: mockData.guests.find((g) => g.id === booking.guest_id),
-        }))
-
-        setProperties(mockData.properties)
-        setRecentBookings(mockBookingsWithRelations.slice(0, 5))
-
-        // Calculate stats from mock data
-        const totalRevenue = mockData.bookings.reduce((sum, booking) => sum + booking.total_amount, 0)
-        const totalCommissions = mockData.bookings.reduce((sum, booking) => sum + (booking.commission_amount || 0), 0)
-        const totalExpenses = mockData.propertyExpenses.reduce((sum, expense) => sum + expense.amount, 0)
-        const netRevenue = totalRevenue - totalCommissions - totalExpenses
-        const confirmedBookings = mockData.bookings.filter((b) => b.status === "confirmed").length
-        const occupancyRate = Math.round((confirmedBookings / (mockData.properties.length * 30)) * 100)
-
-        setStats({
-          totalProperties: mockData.properties.length,
-          totalBookings: mockData.bookings.length,
-          totalGuests: mockData.guests.length,
-          totalRevenue,
-          totalCommissions,
-          totalExpenses,
-          netRevenue,
-          occupancyRate,
-        })
-      } else {
+      {
         // Real Supabase data fetching
         const { data: propertiesData } = await supabase.from("properties").select("*").eq("status", "active")
         const { data: bookingsData } = await supabase
@@ -117,7 +88,6 @@ export default function Dashboard() {
     }
   }
 
-  // Rest of the component remains the same...
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed":
@@ -154,12 +124,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-gray-600">
-          Resumen general de tu negocio de apartamentos turísticos
-          {isDemoMode && <span className="ml-2 text-blue-600 font-medium">(Modo Demo)</span>}
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-2 text-gray-600">Resumen general de tu negocio</p>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -323,15 +292,7 @@ export default function Dashboard() {
                       <Badge variant="outline" className="text-xs">
                         {property.status}
                       </Badge>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`/demo-guide`, "_blank")}
-                        className="text-xs"
-                      >
-                        <BookOpen className="h-3 w-3 mr-1" />
-                        Ver Guía Demo
-                      </Button>
+                      
                     </div>
                   </div>
                 </div>
@@ -340,19 +301,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-      {/* Demo Guide Floating Button */}
-      {isDemoMode && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <Button
-            onClick={() => window.open("/demo-guide", "_blank")}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg rounded-full p-4 animate-bounce"
-            size="lg"
-          >
-            <BookOpen className="h-6 w-6 mr-2" />
-            Ver Guía Demo
-          </Button>
-        </div>
-      )}
+      
     </div>
   )
 }

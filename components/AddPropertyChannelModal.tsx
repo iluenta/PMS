@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { useProperty } from "@/hooks/useProperty"
 import { getChannels, createPropertyChannel } from "@/lib/channels"
 import type { DistributionChannel, CreatePropertyChannelData } from "@/types/channels"
-import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star } from "lucide-react"
+import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star, Building } from "lucide-react"
 
 interface AddPropertyChannelModalProps {
   isOpen: boolean
@@ -52,6 +53,7 @@ export default function AddPropertyChannelModal({
   })
 
   const { toast } = useToast()
+  const { selectedProperty } = useProperty()
 
   // Cargar canales disponibles cuando se abre el modal
   useEffect(() => {
@@ -155,6 +157,28 @@ export default function AddPropertyChannelModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Propiedad seleccionada en modo readonly */}
+          {selectedProperty && (
+            <div className="space-y-2">
+              <Label>Propiedad</Label>
+              <div className="p-3 bg-gray-50 rounded-md border">
+                <div className="flex items-center gap-2">
+                  <Building className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <div className="font-medium">{selectedProperty.name}</div>
+                    {selectedProperty.address && (
+                      <div className="text-sm text-gray-500">
+                        {selectedProperty.address}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
           {/* Selector de Canal */}
           <div className="space-y-2">
             <Label htmlFor="channel">Canal de Distribución *</Label>
@@ -187,6 +211,8 @@ export default function AddPropertyChannelModal({
               </Select>
             )}
           </div>
+
+          {/* No hay entidad People en property_channels; la relación es con distribution_channels */}
 
           {/* Preview del canal seleccionado */}
           {selectedChannel && (

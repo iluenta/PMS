@@ -1,0 +1,1036 @@
+"use client"
+
+import { useState, useEffect, useMemo } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { supabase, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
+import { useProperty } from "@/hooks/useProperty"
+import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
+
+export default function Payments() {
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  // Filtros
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [channelFilter, setChannelFilter] = useState<string>("all")
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
+  const [sortFilter, setSortFilter] = useState<string>("date_desc")
+
+  const { selectedProperty } = useProperty()
+  // Actualiza el campo reservations.payment_status basado en pagos "completed"
+  const updateReservationPaymentStatus = async (reservationId: string) => {
+    if (!reservationId) return
+    try {
+      // Obtener la reserva actual
+      const { data: reservation, error: reservationError } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("id", reservationId)
+        .single()
+
+      if (reservationError || !reservation) {
+        console.error("❌ Error fetching reservation for status update:", reservationError)
+        return
+      }
+
+      // Obtener pagos completados de la reserva
+      const { data: completedPayments, error: paymentsError } = await supabase
+        .from("payments")
+        .select("id, amount, status")
+        .eq("reservation_id", reservationId)
+        .eq("status", "completed")
+
+      if (paymentsError) {
+        console.error("❌ Error fetching payments for status update:", paymentsError)
+        return
+      }
+
+      // Calcular nuevo estado
+      const newStatus = calculatePaymentStatus(reservation as Reservation, completedPayments || [])
+
+      if (reservation.payment_status !== newStatus) {
+        const { error: updateError } = await supabase
+          .from("reservations")
+          .update({ payment_status: newStatus })
+          .eq("id", reservationId)
+
+        if (updateError) {
+          console.error("❌ Error updating reservation payment_status:", updateError)
+        } else {
+          // Refrescar listado de reservas para reflejar el nuevo estado
+          if (selectedProperty) await fetchReservations(selectedProperty.id)
+        }
+      }
+    } catch (error) {
+      console.error("💥 Exception updating reservation payment_status:", error)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchReservations(selectedProperty.id)
+      fetchPayments(selectedProperty.id)
+    } else {
+      setReservations([])
+      setPayments([])
+      setLoading(false)
+    }
+  }, [selectedProperty])
+
+  const fetchReservations = async (propertyId: string) => {
+    try {
+      console.log("🔍 Fetching reservations for property:", propertyId)
+      
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("property_id", propertyId)
+        .neq("status", "cancelled")
+        .order("check_in", { ascending: false })
+
+      if (error) {
+        console.error("❌ Error fetching reservations:", error)
+        throw error
+      }
+
+      console.log("📊 Reservations found:", data?.length || 0)
+      console.log("📋 Sample reservation:", data?.[0])
+      
+      setReservations(data || [])
+    } catch (error) {
+      console.error("❌ Error fetching reservations:", error)
+      setReservations([])
+    }
+  }
+
+  const fetchPayments = async (propertyId: string) => {
+    try {
+      setLoading(true)
+      console.log("🔍 Fetching payments for property:", propertyId)
+      
+      // Primero obtener todas las reservas de la propiedad
+      const { data: propertyReservations, error: reservationsError } = await supabase
+        .from("reservations")
+        .select("id")
+        .eq("property_id", propertyId)
+
+      if (reservationsError) {
+        console.error("❌ Error fetching property reservations:", reservationsError)
+        throw reservationsError
+      }
+
+      const reservationIds = propertyReservations?.map(r => r.id) || []
+      console.log("📊 Found reservation IDs:", reservationIds)
+
+      if (reservationIds.length === 0) {
+        console.log("📊 No reservations found for property, setting empty payments")
+        setPayments([])
+        return
+      }
+
+      // Luego obtener los pagos que correspondan a estas reservas
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from("payments")
+        .select("*")
+        .in("reservation_id", reservationIds)
+        .order("date", { ascending: false })
+
+      if (paymentsError) {
+        console.error("❌ Error fetching payments:", paymentsError)
+        throw paymentsError
+      }
+
+      console.log("📊 Total payments found:", paymentsData?.length || 0)
+      console.log("📋 Sample payments:", paymentsData?.slice(0, 3))
+
+      setPayments(paymentsData || [])
+    } catch (error) {
+      console.error("❌ Error fetching payments:", error)
+      setPayments([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Función para calcular el progreso de pago de una reserva (solo pagos completados)
+  const getReservationPaymentProgress = (reservationId: string) => {
+    const reservationPayments = payments.filter(p => p.reservation_id === reservationId && p.status === 'completed')
+    const totalPaid = reservationPayments.reduce((sum, p) => sum + p.amount, 0)
+    const reservation = reservations.find(r => r.id === reservationId)
+    const totalAmount = reservation?.total_amount || 0
+    return { totalPaid, totalAmount, percentage: totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0 }
+  }
+
+  // Función para obtener reservas no pagadas al 100%
+  const getUnpaidReservations = () => {
+    return reservations.filter(reservation => {
+      const progress = getReservationPaymentProgress(reservation.id)
+      return progress.percentage < 100
+    })
+  }
+
+  // Helpers para filtros
+  const getReservationById = (id: string | null | undefined) => reservations.find(r => r.id === id)
+  const getChannelNameForPayment = (payment: Payment) => {
+    const res = getReservationById(payment.reservation_id || undefined)
+    if (!res) return ""
+    const source = (res as any).external_source || "Direct"
+    // Normalizar
+    if (source === "Direct") return "Propio"
+    return source
+  }
+
+  const availableChannels = useMemo(() => {
+    const names = new Set<string>()
+    for (const p of payments) {
+      const name = getChannelNameForPayment(p)
+      if (name) names.add(name)
+    }
+    return Array.from(names)
+  }, [payments, reservations])
+
+  const filteredPayments = useMemo(() => {
+    let list = [...payments]
+
+    // Buscar por nombre del cliente, referencia o nombre del huésped de la reserva
+    if (searchTerm.trim()) {
+      const s = searchTerm.toLowerCase().trim()
+      list = list.filter(p => {
+        const customer = p.customer_name?.toLowerCase() || ""
+        const reference = p.reference?.toLowerCase() || ""
+        const guest = getReservationById(p.reservation_id || undefined)?.guest?.name?.toLowerCase() || ""
+        return customer.includes(s) || reference.includes(s) || guest.includes(s)
+      })
+    }
+
+    // Estado
+    if (statusFilter !== "all") list = list.filter(p => p.status === statusFilter)
+
+    // Canal
+    if (channelFilter !== "all") list = list.filter(p => getChannelNameForPayment(p) === channelFilter)
+
+    // Rango de fechas sobre la fecha del pago
+    if (dateRangeFilter !== "all") {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      list = list.filter(p => {
+        const d = p.date ? new Date(p.date) : null
+        if (!d) return false
+        const daysDiff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        switch (dateRangeFilter) {
+          case "pending": // usamos mismo nombre; aquí significa fecha futura
+            return d > today
+          case "today":
+            return daysDiff === 0
+          case "this_week":
+            return daysDiff >= 0 && daysDiff <= 7
+          case "this_month":
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          case "past":
+            return d < today
+          default:
+            return true
+        }
+      })
+    }
+
+    // Ordenar
+    list.sort((a, b) => {
+      switch (sortFilter) {
+        case "date_desc":
+          return new Date(b.date).getTime() - new Date(a.date).getTime()
+        case "date_asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        case "amount_desc":
+          return (b.amount || 0) - (a.amount || 0)
+        case "amount_asc":
+          return (a.amount || 0) - (b.amount || 0)
+        default:
+          return 0
+      }
+    })
+
+    return list
+  }, [payments, reservations, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter])
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "failed":
+        return "bg-red-100 text-red-800"
+      case "refunded":
+        return "bg-blue-100 text-blue-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <CheckCircle className="h-4 w-4" />
+      case "pending":
+        return <Clock className="h-4 w-4" />
+      case "failed":
+        return <AlertCircle className="h-4 w-4" />
+      case "refunded":
+        return <DollarSign className="h-4 w-4" />
+      default:
+        return <Clock className="h-4 w-4" />
+    }
+  }
+
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case "credit_card":
+        return "Tarjeta de Crédito"
+      case "bank_transfer":
+        return "Transferencia Bancaria"
+      case "cash":
+        return "Efectivo"
+      case "paypal":
+        return "PayPal"
+      case "check":
+        return "Cheque"
+      case "bizum":
+        return "Bizum"
+      default:
+        return method
+    }
+  }
+
+  const handleEdit = (payment: Payment) => {
+    setEditingPayment(payment)
+    setIsDialogOpen(true)
+  }
+
+  const handleAdd = () => {
+    console.log("➕ Opening new payment dialog")
+    setEditingPayment(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleDelete = async (payment: Payment) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este pago? Esta acción no se puede deshacer.")) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from("payments")
+        .delete()
+        .eq("id", payment.id)
+
+      if (error) throw error
+
+      // Si el pago eliminado estaba asociado a una reserva, recalcular su estado
+      if (payment.reservation_id) await updateReservationPaymentStatus(payment.reservation_id)
+
+      // Recargar los datos
+      if (selectedProperty) {
+        await fetchPayments(selectedProperty.id)
+      }
+    } catch (error) {
+      console.error("Error deleting payment:", error)
+      alert("Error al eliminar el pago")
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Pagos de Reservas</h1>
+          <p className="mt-2 text-gray-600">Gestiona los pagos de las reservas por propiedad</p>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Buscar */}
+          <div className="space-y-2">
+            <Label htmlFor="search">Buscar</Label>
+            <Input
+              id="search"
+              placeholder="Nombre, referencia, huésped..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Estado */}
+          <div className="space-y-2">
+            <Label htmlFor="status">Estado</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="completed">Completados</SelectItem>
+                <SelectItem value="pending">Pendientes</SelectItem>
+                <SelectItem value="failed">Fallidos</SelectItem>
+                <SelectItem value="refunded">Reembolsados</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Canal */}
+          <div className="space-y-2">
+            <Label htmlFor="channel">Canal</Label>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los canales" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los canales</SelectItem>
+                {availableChannels.map((c: string) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Rango de fechas */}
+          <div className="space-y-2">
+            <Label htmlFor="dateRange">Rango de fechas</Label>
+            <Select value={dateRangeFilter} onValueChange={setDateRangeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pendientes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las fechas</SelectItem>
+                <SelectItem value="pending">Futuras</SelectItem>
+                <SelectItem value="today">Hoy</SelectItem>
+                <SelectItem value="this_week">Esta semana</SelectItem>
+                <SelectItem value="this_month">Este mes</SelectItem>
+                <SelectItem value="past">Pasadas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Ordenar */}
+          <div className="space-y-2">
+            <Label htmlFor="sort">Ordenar</Label>
+            <Select value={sortFilter} onValueChange={setSortFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Fecha (reciente)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date_desc">Fecha (reciente)</SelectItem>
+                <SelectItem value="date_asc">Fecha (antigua)</SelectItem>
+                <SelectItem value="amount_desc">Importe (mayor)</SelectItem>
+                <SelectItem value="amount_asc">Importe (menor)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Lista de Pagos */}
+      {selectedProperty ? (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Pagos de {selectedProperty.name}</h2>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleAdd} disabled={!selectedProperty}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Pago
+                </Button>
+              </DialogTrigger>
+              <PaymentDialog
+                payment={editingPayment}
+                propertyId={selectedProperty.id}
+                reservations={reservations}
+                getReservationPaymentProgress={getReservationPaymentProgress}
+                  updateReservationPaymentStatus={updateReservationPaymentStatus}
+                payments={payments}
+                onClose={() => {
+                  console.log("🚪 Closing dialog and clearing state")
+                  setIsDialogOpen(false)
+                  setEditingPayment(null)
+                }}
+                onSave={() => fetchPayments(selectedProperty.id)}
+              />
+            </Dialog>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+           ) : filteredPayments.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No hay pagos</h3>
+                <p className="text-gray-500 mb-4">Comienza agregando tu primer pago</p>
+                <Button onClick={handleAdd}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Pago
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPayments.map((payment: Payment) => (
+                <Card key={payment.id} className="p-4">
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          <CreditCard className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            {payment.customer_name || "Cliente sin nombre"}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            {payment.reference && `Ref: ${payment.reference}`}
+                            {payment.reference && payment.date && " • "}
+                            {payment.date && new Date(payment.date).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-lg font-semibold text-gray-900">
+                          €{payment.amount.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {getMethodLabel(payment.method)}
+                        </p>
+                      </div>
+                      <Badge className={getStatusColor(payment.status)}>
+                        {getStatusIcon(payment.status)}
+                        <span className="ml-1 text-xs">
+                          {payment.status === "completed" && "Completado"}
+                          {payment.status === "pending" && "Pendiente"}
+                          {payment.status === "failed" && "Fallido"}
+                          {payment.status === "refunded" && "Reembolsado"}
+                        </span>
+                      </Badge>
+                    </div>
+                    
+                    {payment.notes && (
+                      <div className="p-2 bg-gray-50 rounded">
+                        <p className="text-xs text-gray-600">{payment.notes}</p>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-end space-x-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(payment)}
+                        className="h-8 px-2"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(payment)}
+                        className="text-red-600 hover:text-red-700 h-8 px-2"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Selecciona una propiedad</h3>
+          <p className="text-gray-500">Elige una propiedad para ver sus pagos</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PaymentDialog({
+  payment,
+  propertyId,
+  reservations,
+  getReservationPaymentProgress,
+  updateReservationPaymentStatus,
+  payments,
+  onClose,
+  onSave,
+}: {
+  payment: Payment | null
+  propertyId: string
+  reservations: Reservation[]
+  getReservationPaymentProgress: (reservationId: string) => { totalPaid: number; totalAmount: number; percentage: number }
+  updateReservationPaymentStatus: (reservationId: string) => Promise<void>
+  payments: Payment[]
+  onClose: () => void
+  onSave: () => void
+}) {
+  const [formData, setFormData] = useState({
+    customer_name: "",
+    amount: 0,
+    method: "credit_card" as Payment['method'],
+    status: "pending" as Payment['status'],
+    date: new Date().toISOString().split('T')[0],
+    reference: "",
+    notes: "",
+    fee: 0,
+    reservation_id: "",
+  })
+
+  const { selectedProperty } = useProperty()
+
+  // Función para limpiar el formulario
+  const clearForm = () => {
+    console.log("🧹 Clearing form data")
+    setFormData({
+      customer_name: "",
+      amount: 0,
+      method: "credit_card" as Payment['method'],
+      status: "pending" as Payment['status'],
+      date: new Date().toISOString().split('T')[0],
+      reference: "",
+      notes: "",
+      fee: 0,
+      reservation_id: "",
+    })
+  }
+
+  // Función para obtener reservas no pagadas al 100% de la propiedad seleccionada
+  const getUnpaidReservations = () => {
+    if (!selectedProperty) return []
+    
+    return reservations.filter(reservation => {
+      // Asegurar que la reserva pertenece a la propiedad seleccionada
+      if (reservation.property_id !== selectedProperty.id) return false
+      
+      const progress = getReservationPaymentProgress(reservation.id)
+      return progress.percentage < 100
+    })
+  }
+
+  // Función para auto-rellenar el nombre del huésped cuando se selecciona una reserva
+  const handleReservationChange = (reservationId: string) => {
+    const selectedReservation = reservations.find(r => r.id === reservationId)
+    console.log("🔍 Selected reservation:", selectedReservation)
+    
+    if (selectedReservation) {
+      const amounts = calculateReservationAmounts(selectedReservation)
+      // Calcular pagos parciales completados existentes para esta reserva
+      const completedForReservation = payments
+        .filter((p) => p.reservation_id === reservationId && p.status === 'completed')
+      const totalCompletedPaid = completedForReservation
+        .reduce((sum, p) => sum + (p.amount || 0), 0)
+      const defaultAmount = Math.max(0, amounts.finalAmount - totalCompletedPaid)
+      setFormData({
+        ...formData,
+        reservation_id: reservationId,
+        customer_name: selectedReservation.guest?.name || "",
+        // Para nuevo pago, sugerir lo pendiente; si estamos editando, mantener importe
+        amount: payment ? formData.amount : defaultAmount
+      })
+    } else {
+      setFormData({
+        ...formData,
+        reservation_id: reservationId,
+        customer_name: "",
+        amount: formData.amount || 0
+      })
+    }
+  }
+
+  useEffect(() => {
+    console.log("🔄 useEffect triggered with payment:", payment)
+    
+    if (payment) {
+      // Si hay un pago, cargar sus datos para edición
+      console.log("📝 Loading payment data for editing:", payment)
+      setFormData({
+        customer_name: payment.customer_name,
+        amount: payment.amount || 0,
+        method: payment.method,
+        status: payment.status,
+        date: payment.date.split('T')[0],
+        reference: payment.reference || "",
+        notes: payment.notes || "",
+        fee: payment.fee || 0,
+        reservation_id: payment.reservation_id || "no_reservation",
+      })
+    } else {
+      // Si no hay pago, limpiar el formulario para nuevo pago
+      clearForm()
+    }
+  }, [payment])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      // Validación del importe del pago
+      if (formData.reservation_id && formData.reservation_id !== "no_reservation" && formData.amount > 0) {
+        const selectedReservation = reservations.find(r => r.id === formData.reservation_id)
+        if (selectedReservation) {
+          // Calcular el importe requerido para esta reserva
+          const requiredAmount = calculateRequiredAmount(selectedReservation)
+          
+          // Obtener los pagos existentes para esta reserva (excluyendo el pago actual si estamos editando)
+          const { data: existingPayments } = await supabase
+            .from("payments")
+            .select("id, amount")
+            .eq("reservation_id", formData.reservation_id)
+            .eq("status", "completed")
+          
+          let totalExistingPayments = 0
+          if (existingPayments) {
+            totalExistingPayments = existingPayments.reduce((sum, p) => {
+              // Si estamos editando, excluir el importe del pago actual
+              if (payment && p.id === payment.id) {
+                return sum
+              }
+              return sum + (p.amount || 0)
+            }, 0)
+          }
+          
+          const pendingAmount = Math.max(0, requiredAmount - totalExistingPayments)
+          const newTotalPayments = totalExistingPayments + formData.amount
+          
+          // Debug logging
+          console.log('Payment validation:', {
+            reservationId: formData.reservation_id,
+            requiredAmount,
+            totalExistingPayments,
+            newPaymentAmount: formData.amount,
+            newTotalPayments,
+            pendingAmount,
+            isEditing: !!payment
+          })
+          
+          // Validar que no se exceda el importe requerido
+          if (newTotalPayments > requiredAmount) {
+            const excessAmount = newTotalPayments - requiredAmount
+            const warningMessage = `⚠️ Advertencia: El importe del pago excede el importe requerido.
+
+Importe requerido: €${requiredAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Pagos realizados: €${totalExistingPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Importe pendiente: €${pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+¿Desea continuar con el pago de todas formas?`
+
+            const shouldContinue = confirm(warningMessage)
+            if (!shouldContinue) {
+              return
+            }
+          }
+        }
+      }
+
+      const paymentData = {
+        ...formData,
+        reservation_id: formData.reservation_id === "no_reservation" ? null : formData.reservation_id,
+      }
+
+      if (payment) {
+        const { error } = await supabase
+          .from("payments")
+          .update(paymentData)
+          .eq("id", payment.id)
+
+        if (error) throw error
+        // Actualizar estado de la reserva
+        if (paymentData.reservation_id) await updateReservationPaymentStatus(paymentData.reservation_id)
+      } else {
+        const { error } = await supabase
+          .from("payments")
+          .insert([paymentData])
+
+        if (error) throw error
+        // Actualizar estado de la reserva
+        if (paymentData.reservation_id) await updateReservationPaymentStatus(paymentData.reservation_id)
+      }
+
+      onSave()
+      onClose()
+    } catch (error) {
+      console.error("Error saving payment:", error)
+    }
+  }
+
+  // Obtener la reserva seleccionada para mostrar los importes
+  const selectedReservation = formData.reservation_id && formData.reservation_id !== "no_reservation" 
+    ? reservations.find(r => r.id === formData.reservation_id) 
+    : null
+
+  const reservationAmounts = selectedReservation ? calculateReservationAmounts(selectedReservation) : null
+  const partialsForSelected: Payment[] = selectedReservation 
+    ? (payments as Payment[]).filter((p: Payment) => p.reservation_id === selectedReservation.id && p.status === 'completed')
+    : []
+  const totalCompletedPaidForSelected = partialsForSelected.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+
+  return (
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>{payment ? "Editar Pago" : "Nuevo Pago"}</DialogTitle>
+        <DialogDescription>
+          {payment ? "Modifica los datos del pago" : "Registra un nuevo pago para esta propiedad"}
+        </DialogDescription>
+      </DialogHeader>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Reserva como primer campo */}
+        <div className="space-y-2">
+          <Label htmlFor="reservation_id">Reserva *</Label>
+          <Select
+            value={formData.reservation_id}
+            onValueChange={handleReservationChange}
+            required
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona una reserva" />
+            </SelectTrigger>
+            <SelectContent>
+              {getUnpaidReservations().map((reservation) => (
+                <SelectItem key={reservation.id} value={reservation.id}>
+                  {reservation.guest?.name || "Sin nombre"} - {reservation.check_in} a {reservation.check_out} (€{reservation.total_amount})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="customer_name">Nombre del Cliente</Label>
+            <Input
+              id="customer_name"
+              value={formData.customer_name}
+              onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+              required
+              readOnly={formData.reservation_id !== "" && formData.reservation_id !== "no_reservation"}
+            />
+          </div>
+        </div>
+
+        {/* Sección específica de importes */}
+        {selectedReservation && reservationAmounts && (
+          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-900">Desglose de Importes</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Importe Total de la Reserva</Label>
+                <Input
+                  value={`€${reservationAmounts.totalAmount.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Comisión de Venta</Label>
+                <Input
+                  value={`€${reservationAmounts.channelCommission.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Comisión de Cobro</Label>
+                <Input
+                  value={`€${reservationAmounts.collectionCommission.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">IVA (21% de comisiones)</Label>
+                <Input
+                  value={`€${reservationAmounts.commissionIVA.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label className="text-sm font-medium text-gray-700">Pagos parciales realizados (completados)</Label>
+                <Input
+                  value={`€${totalCompletedPaidForSelected.toFixed(2)}`}
+                  readOnly
+                  className="bg-white"
+                />
+              </div>
+            </div>
+            <div className="pt-2 border-t border-gray-200">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Importe Final (Calculado)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                    setFormData({ ...formData, amount: numValue })
+                  }}
+                  className="bg-white font-semibold"
+                  required
+                />
+                <p className="text-xs text-gray-500">
+                  Importe calculado: €{reservationAmounts.finalAmount.toFixed(2)} − Pagos parciales €{totalCompletedPaidForSelected.toFixed(2)} = €{Math.max(0, reservationAmounts.finalAmount - totalCompletedPaidForSelected).toFixed(2)} — Puedes modificar este valor
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Campo de importe editable solo si no hay reserva seleccionada */}
+        {(!selectedReservation || !reservationAmounts) && (
+          <div className="space-y-2">
+            <Label htmlFor="amount">Importe del Pago (€)</Label>
+            <Input
+              id="amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.amount || ""}
+              onChange={(e) => {
+                const value = e.target.value
+                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                setFormData({ ...formData, amount: numValue })
+              }}
+              required
+              className="font-semibold"
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="method">Método de Pago</Label>
+            <Select
+              value={formData.method}
+              onValueChange={(value) => setFormData({ ...formData, method: value as Payment['method'] })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="credit_card">Tarjeta de Crédito</SelectItem>
+                <SelectItem value="bank_transfer">Transferencia Bancaria</SelectItem>
+                <SelectItem value="cash">Efectivo</SelectItem>
+                <SelectItem value="paypal">PayPal</SelectItem>
+                <SelectItem value="check">Cheque</SelectItem>
+                <SelectItem value="bizum">Bizum</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Estado</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value) => setFormData({ ...formData, status: value as Payment['status'] })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="completed">Completado</SelectItem>
+                <SelectItem value="failed">Fallido</SelectItem>
+                <SelectItem value="refunded">Reembolsado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="date">Fecha de Pago</Label>
+            <Input
+              id="date"
+              type="date"
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fee">Cargo Adicional (€)</Label>
+            <Input
+              id="fee"
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.fee || ""}
+              onChange={(e) => {
+                const value = e.target.value
+                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+                setFormData({ ...formData, fee: numValue })
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reference">Referencia</Label>
+          <Input
+            id="reference"
+            value={formData.reference}
+            onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+            placeholder="Número de referencia del pago"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="notes">Notas</Label>
+          <Textarea
+            id="notes"
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Notas adicionales sobre el pago"
+            rows={3}
+          />
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-4 border-t">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit">{payment ? "Actualizar" : "Crear"} Pago</Button>
+        </div>
+      </form>
+    </DialogContent>
+  )
+} 

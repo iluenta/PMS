@@ -1,4 +1,4 @@
-import { supabase, isDemoMode } from "./supabase"
+import { supabase } from "./supabase"
 import type { User } from "./supabase"
 
 export interface AuthUser {
@@ -91,17 +91,7 @@ export async function getUserProfile(userId: string, retryCount = 0): Promise<Au
   try {
     console.log(`getUserProfile: Starting attempt ${retryCount + 1} for userId:`, userId)
     
-    if (isDemoMode) {
-      console.log("getUserProfile: Demo mode, returning mock user")
-      return {
-        id: userId,
-        email: "demo@pms.com",
-        full_name: "Demo User",
-        role: "admin",
-        is_active: true,
-        last_login: new Date().toISOString(),
-      }
-    }
+    
 
     console.log(`getUserProfile: Querying users table (timeout: ${timeoutDuration}ms)...`)
     
