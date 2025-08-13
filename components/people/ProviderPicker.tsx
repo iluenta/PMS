@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { searchPeople } from '@/lib/peopleService'
+import { searchPeople, createPerson } from '@/lib/peopleService'
 import type { Person } from '@/types/people'
 
 interface Props {
@@ -22,14 +22,40 @@ export function ProviderPicker({ value, onChange }: Props) {
 
   function closePopover() {
     setOpen(false)
-    setTimeout(() => inputRef.current?.blur(), 0)
+    // Limpiar la búsqueda al cerrar
+    setQuery('')
   }
 
-  function createFromTyped() {
+  async function createFromTyped() {
     const typed = (query.trim() || value.name).trim()
     if (!typed) { closePopover(); return }
-    onChange({ ...value, name: typed, personId: undefined })
-    closePopover()
+    
+    try {
+      // Crear el proveedor en la base de datos
+      const newPerson = await createPerson({
+        first_name: typed,
+        last_name: '',
+        company_name: typed,
+        email: '',
+        phone: '',
+        country: '',
+        person_type: 'provider'
+      })
+      
+      // Actualizar el valor con el nuevo proveedor creado
+      onChange({ 
+        ...value, 
+        name: typed, 
+        personId: newPerson.id 
+      }, newPerson)
+      
+      closePopover()
+    } catch (error) {
+      console.error('Error creating provider:', error)
+      // Si falla la creación, al menos actualizar el nombre
+      onChange({ ...value, name: typed, personId: undefined })
+      closePopover()
+    }
   }
 
   useEffect(() => {
@@ -42,43 +68,72 @@ export function ProviderPicker({ value, onChange }: Props) {
     return () => clearTimeout(t)
   }, [query])
 
+  // Cerrar popover cuando se selecciona un proveedor
+  useEffect(() => {
+    if (value.personId && open) {
+      closePopover()
+    }
+  }, [value.personId, open])
+
+  // Cargar el proveedor existente si tenemos vendor_id pero no personId
+  useEffect(() => {
+    if (value.personId && !results.some(p => p.id === value.personId)) {
+      // Si tenemos un personId pero no está en los resultados, buscar específicamente
+      const loadExistingProvider = async () => {
+        try {
+          const results = await searchPeople({ query: value.name, type: 'provider', limit: 1 })
+          if (results.length > 0) {
+            setResults(results)
+          }
+        } catch (error) {
+          console.error('Error loading existing provider:', error)
+        }
+      }
+      loadExistingProvider()
+    }
+  }, [value.personId, value.name])
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Input
-          ref={inputRef}
-          value={value.name}
-          placeholder="Nombre del proveedor"
-          onChange={(e) => {
-            onChange({ ...value, name: e.target.value })
-            setQuery(e.target.value)
-            if (!open) setOpen(true)
-          }}
-          onFocus={() => { if (!value.name && !query) setOpen(true) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); closePopover() }
-            if (e.key === 'Enter') {
-              const hasResults = results.length > 0
-              if (!hasResults) { e.preventDefault(); createFromTyped() }
-              else {
-                // If there is a highlighted item, Command will handle it.
-                // If not, but user pressed Enter, fallback to create from typed
-                // to avoid being "stuck" with no action.
-                setTimeout(() => {
-                  if (open) return
-                }, 0)
-              }
-            }
-            if (e.key === 'ArrowDown') {
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            value={value.name}
+            placeholder="Nombre del proveedor"
+            onChange={(e) => {
+              onChange({ ...value, name: e.target.value, personId: undefined })
+              setQuery(e.target.value)
               if (!open) setOpen(true)
-            }
-          }}
-          onBlur={(e) => {
-            const next = e.relatedTarget as HTMLElement | null
-            const isWithinPopover = next?.closest('[role="dialog"]')
-            if (!isWithinPopover) setOpen(false)
-          }}
-        />
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { 
+                e.preventDefault(); 
+                closePopover() 
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (results.length === 0) {
+                  createFromTyped()
+                }
+              }
+              if (e.key === 'ArrowDown') {
+                if (!open) setOpen(true)
+              }
+            }}
+          />
+          {value.personId && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...value, name: '', personId: undefined })}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title="Limpiar proveedor"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[420px]" align="start" onCloseAutoFocus={(e) => e.preventDefault()}>
         <Command shouldFilter={false}>
@@ -87,16 +142,16 @@ export function ProviderPicker({ value, onChange }: Props) {
             value={query}
             onValueChange={setQuery}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.preventDefault(); closePopover() }
-              if (e.key === 'Enter') {
-                const hasResults = results.length > 0
-                if (!hasResults) { e.preventDefault(); createFromTyped() }
+              if (e.key === 'Escape') { 
+                e.preventDefault(); 
+                closePopover() 
               }
-            }}
-            onBlur={(e) => {
-              const next = (e.relatedTarget as HTMLElement | null)
-              const isInside = next?.closest('[role="dialog"]')
-              if (!isInside) setOpen(false)
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (results.length === 0) {
+                  createFromTyped()
+                }
+              }
             }}
           />
           <CommandList>
