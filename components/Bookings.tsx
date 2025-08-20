@@ -1981,10 +1981,10 @@ function BookingDialog({
 
 
         <div className="flex justify-end space-x-2 pt-4 border-t">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
             Cancelar
           </Button>
-          <Button type="submit" disabled={calculatingCommissions}>
+          <Button type="submit" disabled={calculatingCommissions} className="bg-blue-600 hover:bg-blue-700">
             {calculatingCommissions ? "Calculando..." : (booking ? "Actualizar" : "Crear")} Reserva
           </Button>
         </div>

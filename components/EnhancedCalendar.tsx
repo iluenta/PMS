@@ -314,10 +314,10 @@ export default function EnhancedCalendar() {
             Vista de 2 Meses
           </CardTitle>
           <div className="flex space-x-2">
-            <Button variant="outline" size="sm" onClick={() => navigateQuarter("prev")}>
+            <Button variant="outline" size="sm" onClick={() => navigateQuarter("prev")} className="border-blue-600 text-blue-600 hover:bg-blue-50">
               Anterior
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateQuarter("next")}>
+            <Button variant="outline" size="sm" onClick={() => navigateQuarter("next")} className="border-blue-600 text-blue-600 hover:bg-blue-50">
               Siguiente
             </Button>
           </div>

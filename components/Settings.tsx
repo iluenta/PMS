@@ -508,7 +508,7 @@ export default function Settings() {
                             {logoPreview ? "Cambiar" : "Subir"}
                           </Label>
                           {logoPreview && (
-                            <Button type="button" variant="ghost" size="sm" onClick={removeLogo} className="text-red-600">
+                            <Button type="button" variant="ghost" size="sm" onClick={removeLogo} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
                               <X className="h-4 w-4 mr-1" />
                               Eliminar
                             </Button>
@@ -530,10 +530,11 @@ export default function Settings() {
                           resetForm()
                           setChannelPerson({ name: "", personId: undefined })
                         }}
+                        className="border-blue-600 text-blue-600 hover:bg-blue-50"
                       >
                         Cancelar
                       </Button>
-                      <Button type="submit">
+                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                         {editingChannel ? "Actualizar" : "Crear"}
                       </Button>
                     </div>
@@ -602,7 +603,7 @@ export default function Settings() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDelete(channel.id)}
-                          className="text-red-600 hover:text-red-800"
+                          className="border-red-600 text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -622,7 +623,7 @@ export default function Settings() {
                 <p className="text-muted-foreground mb-4">
                   Comienza creando canales de distribución
                 </p>
-                <Button onClick={() => setIsDialogOpen(true)}>
+                <Button onClick={() => setIsDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Crear Primer Canal
                 </Button>
@@ -662,7 +663,7 @@ export default function Settings() {
                       <Button onClick={() => {
                         setEditingCategory(null)
                         setCategoryFormData({ description: "" })
-                      }}>
+                      }} className="bg-blue-600 hover:bg-blue-700">
                         <Plus className="h-4 w-4 mr-2" />
                         Añadir Categoría
                       </Button>

@@ -341,10 +341,10 @@ export default function PropertyExpensesForm({
 
       {/* Botones de acción */}
       <div className="flex justify-end space-x-2 pt-4 border-t">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
           Cancelar
         </Button>
-        <Button type="submit">
+        <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
           {expense ? "Actualizar" : "Crear"} Gasto
         </Button>
       </div>

@@ -154,8 +154,8 @@ export default function PersonForm({ person, onClose, onSaved }: Props) {
       </div>
 
       <div className="flex justify-end gap-2 pt-2 border-t">
-        <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-        <Button type="submit">{isEditing ? 'Actualizar' : 'Crear'}</Button>
+        <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">Cancelar</Button>
+        <Button type="submit" className="bg-blue-600 hover:bg-blue-700">{isEditing ? 'Actualizar' : 'Crear'}</Button>
       </div>
     </form>
   )

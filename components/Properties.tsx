@@ -122,7 +122,7 @@ export default function Properties() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="mr-2">
+            <Button onClick={handleAdd} className="mr-2 bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
               Añadir
             </Button>
@@ -211,11 +211,11 @@ export default function Properties() {
               </div>
 
               <div className="flex items-center justify-between space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(property)} className="flex-1">
+                <Button variant="outline" size="sm" onClick={() => handleEdit(property)} className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-50">
                   <Edit className="h-4 w-4 mr-1" />
                   Editar
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => window.open(`/guide/${property.id}`, "_blank")}>
+                <Button variant="outline" size="sm" onClick={() => window.open(`/guide/${property.id}`, "_blank")} className="border-blue-600 text-blue-600 hover:bg-blue-50">
                   <BookOpen className="h-4 w-4 mr-1" />
                   Guía
                 </Button>

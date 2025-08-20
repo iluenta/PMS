@@ -1025,10 +1025,10 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
         </div>
 
         <div className="flex justify-end space-x-2 pt-4 border-t">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
             Cancelar
           </Button>
-          <Button type="submit">{payment ? "Actualizar" : "Crear"} Pago</Button>
+          <Button type="submit" className="bg-blue-600 hover:bg-blue-700">{payment ? "Actualizar" : "Crear"} Pago</Button>
         </div>
       </form>
     </DialogContent>
