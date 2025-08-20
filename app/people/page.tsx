@@ -168,7 +168,7 @@ export default function PeoplePage() {
                         variant="outline"
                         size="sm"
                         onClick={() => { setEditingPerson(person); setIsDialogOpen(true) }}
-                        className="h-8 px-2"
+                        className="h-8 px-2 border-blue-600 text-blue-600 hover:bg-blue-50"
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
@@ -176,7 +176,7 @@ export default function PeoplePage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(person)}
-                        className="h-8 px-2 text-red-600 hover:text-red-700"
+                        className="h-8 px-2 border-red-600 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>

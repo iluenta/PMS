@@ -183,7 +183,7 @@ export default function PropertyExpensesTable({
                   variant="outline"
                   size="sm"
                   onClick={() => onCreateRecurrence(expense)}
-                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
                 >
                   <span className="mr-1">🔄</span>
                   Recurrente
@@ -192,7 +192,7 @@ export default function PropertyExpensesTable({
                   variant="outline"
                   size="sm"
                   onClick={() => onEdit(expense)}
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
                 >
                   <Edit className="h-4 w-4 mr-1" />
                   Editar
@@ -201,7 +201,7 @@ export default function PropertyExpensesTable({
                   variant="outline"
                   size="sm"
                   onClick={() => onDelete(expense)}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="border-red-600 text-red-600 hover:bg-red-50"
                 >
                   <Trash2 className="h-4 w-4 mr-1" />
                   Eliminar

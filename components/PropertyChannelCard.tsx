@@ -179,7 +179,7 @@ export default function PropertyChannelCard({
              variant="outline" 
              size="sm" 
              onClick={() => onEdit(propertyChannel)}
-             className="flex-1"
+             className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-50"
            >
              <Edit className="h-4 w-4 mr-2" />
              Editar
@@ -188,7 +188,7 @@ export default function PropertyChannelCard({
              variant="outline" 
              size="sm" 
              onClick={() => onDelete(propertyChannel.id)}
-             className="text-red-600 hover:text-red-700 hover:bg-red-50"
+             className="border-red-600 text-red-600 hover:bg-red-50"
            >
              <Trash2 className="h-4 w-4" />
            </Button>

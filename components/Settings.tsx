@@ -593,7 +593,7 @@ export default function Settings() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1"
+                          className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-50"
                           onClick={() => handleEdit(channel)}
                         >
                           <Edit className="h-4 w-4 mr-2" />
