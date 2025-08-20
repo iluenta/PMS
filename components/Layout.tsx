@@ -27,6 +27,13 @@ import {
   Globe,
   User,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -107,8 +114,16 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 }
 
 function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void }) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const { tenant, loading } = useTenant()
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
 
   return (
     <header className="flex h-20 items-center justify-between border-b border-white/20 bg-white/60 backdrop-blur-xl px-4 md:px-8 shadow-lg">
@@ -144,10 +159,25 @@ function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void 
           </div>
         ) : null}
         
-        {/* Avatar del usuario */}
-        <div className="relative h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center ring-2 ring-blue-200">
-          <User className="h-5 w-5 text-white" />
-        </div>
+        {/* Avatar del usuario con dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="relative h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center ring-2 ring-blue-200 cursor-pointer hover:ring-blue-300 transition-all duration-200">
+              <User className="h-5 w-5 text-white" />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="px-3 py-2">
+              <p className="text-sm font-medium text-gray-900">{user?.full_name || 'Usuario'}</p>
+              <p className="text-xs text-gray-500">{user?.email}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut} className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer">
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar Sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

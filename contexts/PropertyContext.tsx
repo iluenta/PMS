@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { supabase, type Property } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Tipos para el contexto
 interface PropertyContextType {
@@ -39,6 +40,7 @@ interface PropertyProviderProps {
 
 // Provider component
 export function PropertyProvider({ children }: PropertyProviderProps) {
+  const { user } = useAuth()
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +50,18 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
     try {
       setLoading(true)
       
-      
+      // Si no hay usuario o tenant_id, no cargar propiedades
+      if (!user?.tenant_id) {
+        setProperties([])
+        setSelectedProperty(null)
+        return
+      }
 
       const { data, error } = await supabase
         .from("properties")
         .select("*")
         .eq("status", "active")
+        .eq("tenant_id", user.tenant_id)
         .order("name")
 
       if (error) {
@@ -95,10 +103,10 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
     return properties.find(p => p.id === propertyId) || null
   }
 
-  // Cargar propiedades al montar el componente
+  // Cargar propiedades al montar el componente o cuando cambie el usuario/tenant
   useEffect(() => {
     fetchProperties()
-  }, [])
+  }, [user?.tenant_id])
 
   // Restaurar propiedad seleccionada desde localStorage
   useEffect(() => {
@@ -129,6 +137,16 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
       localStorage.setItem("selectedPropertyId", selectedProperty.id)
     }
   }, [selectedProperty])
+
+  // Limpiar propiedades cuando cambie el tenant
+  useEffect(() => {
+    if (!user?.tenant_id) {
+      setProperties([])
+      setSelectedProperty(null)
+      // Limpiar localStorage cuando no hay tenant
+      localStorage.removeItem("selectedPropertyId")
+    }
+  }, [user?.tenant_id])
 
   const value: PropertyContextType = {
     selectedProperty,

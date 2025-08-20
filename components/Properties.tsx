@@ -24,6 +24,7 @@ import { supabase, type Property } from "@/lib/supabase"
 import { Building2, Plus, Edit, MapPin, Users, Bed, Bath, Camera, X, Star, BookOpen, CalendarCheck, Globe } from "lucide-react"
 import PropertyChannels from "./PropertyChannels"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Helper function to normalize property type from database
 const normalizePropertyType = (type: string): string => {
@@ -64,6 +65,7 @@ const getPropertyTypeDisplayName = (type: string) => {
 }
 
 export default function Properties() {
+  const { user } = useAuth()
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -71,12 +73,25 @@ export default function Properties() {
   const { toast } = useToast()
 
   useEffect(() => {
-    fetchProperties()
-  }, [])
+    if (user?.tenant_id) {
+      fetchProperties()
+    }
+  }, [user?.tenant_id])
 
   const fetchProperties = async () => {
     try {
-      const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
+      // Solo cargar propiedades si hay un usuario con tenant_id
+      if (!user?.tenant_id) {
+        setProperties([])
+        setLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("tenant_id", user.tenant_id)
+        .order("created_at", { ascending: false })
 
       if (error) throw error
 
@@ -266,6 +281,7 @@ function PropertyDialog({
   onSave: () => void
 }) {
   const { toast } = useToast()
+  const { user } = useAuth() // Agregar hook para acceder al usuario
   
   // Estabilizar la referencia de property para evitar re-renders
   const stableProperty = useMemo(() => property, [property?.id])
@@ -435,11 +451,12 @@ function PropertyDialog({
         // Remove cover_image from formData as it doesn't exist in the database
         const { cover_image, ...propertyData } = formData
         
-        // Include availability settings in the property data
+        // Include availability settings and tenant_id in the property data
         const propertyDataWithAvailability = {
           ...propertyData,
           min_stay: availabilityData.min_nights,
           max_stay: availabilityData.max_nights,
+          tenant_id: user?.tenant_id, // Asignar automáticamente el tenant_id del usuario
         }
         
         const { data: newProperty, error } = await supabase
