@@ -23,6 +23,7 @@ import {
   Settings,
   LogOut,
   Globe,
+  User,
 } from "lucide-react"
 
 const navigation = [
@@ -48,32 +49,53 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 border-r">
-      <div className="flex items-center justify-between h-16 px-4 border-b">
-        <Link href="/" className="flex items-center gap-2 font-semibold" onClick={onLinkClick}>
-          <Building2 className="h-6 w-6 text-primary" />
-          <span className="font-bold">TuriGest</span>
-        </Link>
+    <div className="flex flex-col h-full bg-white border-r border-gray-200">
+      {/* Header con logo TuriGest */}
+      <div className="flex h-20 items-center justify-between px-8 border-b border-gray-200 bg-blue-600">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
+            <Building2 className="w-6 h-6 text-white" />
+          </div>
+          <h1 className="text-white text-xl font-bold">TuriGest</h1>
+        </div>
       </div>
-      <div className="flex-1 overflow-auto py-2">
-        <nav className="grid items-start px-4 text-sm font-medium">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={onLinkClick}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-primary ${
-                pathname === item.href ? "bg-gray-100 text-primary" : ""
-              }`}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
-          ))}
+      
+      {/* Navegación */}
+      <div className="flex-1 overflow-auto py-6">
+        <nav className="px-6 space-y-1">
+          {navigation.map((item) => {
+            // Dashboard está activo si estamos en / o en /dashboard
+            const isActive = item.name === 'Dashboard' ? 
+              (pathname === '/' || pathname === '/dashboard') : 
+              pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={onLinkClick}
+                className={`flex items-center rounded-lg px-4 py-3 text-base font-medium transition-all duration-200 group ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <item.icon className={`mr-3 h-5 w-5 transition-all duration-200 ${
+                  isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
+                }`} />
+                {item.name}
+              </Link>
+            )
+          })}
         </nav>
       </div>
-      <div className="mt-auto border-t p-4">
-        <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
+      
+      {/* Botón Cerrar Sesión */}
+      <div className="p-6 border-t border-gray-200">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50" 
+          onClick={handleSignOut}
+        >
           <LogOut className="h-4 w-4 mr-2" />
           Cerrar Sesión
         </Button>
@@ -86,26 +108,32 @@ function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void 
   const { user } = useAuth()
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-white px-6">
-      <Button
-        variant="outline"
-        size="icon"
-        className="lg:hidden"
-        onClick={onMobileMenuToggle}
-      >
-        <Menu className="h-6 w-6" />
-        <span className="sr-only">Abrir menú</span>
-      </Button>
-      
-      {/* Property Selector - Centrado en desktop */}
-      <div className="flex-1 flex justify-center lg:justify-start">
-        <PropertySelector variant="compact" className="max-w-xs" />
+    <header className="flex h-20 items-center justify-between border-b border-white/20 bg-white/60 backdrop-blur-xl px-4 md:px-8 shadow-lg">
+      <div className="flex items-center space-x-4 md:space-x-6">
+        {/* Botón hamburguesa para móvil */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="md:hidden p-2 rounded-lg hover:bg-white/80 transition-all duration-200"
+          onClick={onMobileMenuToggle}
+        >
+          <Menu className="h-6 w-6 text-gray-700" />
+        </Button>
+        
+        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+        
+        {/* Selector de Propiedades */}
+        <div className="hidden sm:block">
+          <PropertySelector variant="compact" className="max-w-xs" />
+        </div>
       </div>
       
-      {/* User email - Derecha */}
-      <span className="text-sm text-gray-500 hidden sm:inline">
-        {user?.email}
-      </span>
+      <div className="flex items-center space-x-4">
+        {/* Avatar del usuario */}
+        <div className="relative h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center ring-2 ring-blue-200">
+          <User className="h-5 w-5 text-white" />
+        </div>
+      </div>
     </header>
   )
 }

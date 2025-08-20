@@ -32,6 +32,19 @@ function getSupabaseClient() {
           persistSession: true,
           detectSessionInUrl: false,
         },
+        // Configuración adicional para manejar problemas de certificados SSL
+        global: {
+          headers: {
+            'User-Agent': 'TuriGest/1.0'
+          },
+          // Configuración para entornos corporativos con problemas de SSL
+          ...(typeof window === 'undefined' && {
+            // Solo en el servidor, configurar para manejar certificados problemáticos
+            rejectUnauthorized: false,
+            // Timeout más largo para entornos corporativos
+            timeout: 30000,
+          })
+        }
       })
     }
   }

@@ -3,7 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext"
 import LoginForm from "@/components/LoginForm"
 import { Layout } from "@/components/Layout"
-import Dashboard from "@/components/Dashboard"
+import { Dashboard } from "@/components/Dashboard"
 
 export default function HomePage() {
   const { user, loading } = useAuth()
