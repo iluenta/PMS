@@ -196,7 +196,7 @@ export default function PropertyChannels({ propertyId }: PropertyChannelsProps =
               </h3>
               {/* Botón Añadir Canal solo en modo no embebido */}
               {!isEmbeddedMode && (
-                <Button size="sm" onClick={handleAddChannel}>
+                <Button size="sm" onClick={handleAddChannel} className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Añadir Canal
                 </Button>
