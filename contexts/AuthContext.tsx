@@ -19,13 +19,14 @@ interface AuthContextType {
   signOut: () => Promise<void>
   signInDemo: () => Promise<void>
   error: string | null
+  onTenantChange?: (tenantId: number | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // demo mode removed
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, onTenantChange }: { children: React.ReactNode, onTenantChange?: (tenantId: number | null) => void }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log("Token refresh failed, signing out...")
           setTimeout(async () => {
             await clearExpiredTokens()
+            onTenantChange?.(null)
           }, 0)
           setUser(null)
           setLoading(false)
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_OUT") {
         console.log("User signed out")
         setUser(null)
+        onTenantChange?.(null)
         setLoading(false)
         return
       }
@@ -64,18 +67,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (userProfile) {
             setUser(userProfile)
+            // Notify about tenant change if tenant_id is available
+            if (userProfile.tenant_id) {
+              onTenantChange?.(userProfile.tenant_id)
+            } else {
+              onTenantChange?.(null)
+            }
           } else {
             setUser(null)
+            onTenantChange?.(null)
           }
         } catch (error) {
           console.error("AuthContext: Error in auth state change:", error)
           setUser(null)
+          onTenantChange?.(null)
         } finally {
           setLoading(false)
         }
       } else {
         console.log("No valid session")
         setUser(null)
+        onTenantChange?.(null)
         setLoading(false)
       }
     })
@@ -83,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  }, [onTenantChange])
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -92,6 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const user = await signInWithPassword({ email, password })
       setUser(user)
+      
+      // Notify about tenant change if tenant_id is available
+      if (user.tenant_id) {
+        onTenantChange?.(user.tenant_id)
+      }
       
     } catch (err) {
       const error = err as Error
@@ -108,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true)
       await signOutApi()
       setUser(null)
+      onTenantChange?.(null)
     } catch (error) {
       console.error("Sign out error:", error)
       throw error
@@ -140,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     signInDemo,
     error,
+    onTenantChange,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

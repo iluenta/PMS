@@ -9,6 +9,8 @@ import { PropertyProvider, useProperty } from "@/contexts/PropertyContext"
 import { PropertySelector } from "@/components/PropertySelector"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/toaster"
+import { useTenantSync } from "@/hooks/useTenantSync"
+import { useTenant } from "@/contexts/TenantContext"
 import {
   Menu,
   X,
@@ -106,7 +108,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
 function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void }) {
   const { user } = useAuth()
-  const { selectedProperty, loading } = useProperty()
+  const { tenant, loading } = useTenant()
 
   return (
     <header className="flex h-20 items-center justify-between border-b border-white/20 bg-white/60 backdrop-blur-xl px-4 md:px-8 shadow-lg">
@@ -130,15 +132,15 @@ function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void 
       </div>
       
       <div className="flex items-center space-x-6">
-        {/* Propiedad Seleccionada Info */}
+        {/* Tenant Info */}
         {loading ? (
           <div className="hidden md:flex items-center space-x-2">
             <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
           </div>
-        ) : selectedProperty ? (
+        ) : tenant ? (
           <div className="hidden md:flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
             <Building2 className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-800">{selectedProperty.name}</span>
+            <span className="text-sm font-medium text-blue-800">{tenant.name}</span>
           </div>
         ) : null}
         
@@ -157,6 +159,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useAuthRedirect()
+  useTenantSync() // Sincronizar tenant con usuario autenticado
 
   if (loading) {
     return (

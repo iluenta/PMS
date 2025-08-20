@@ -8,6 +8,7 @@ export interface AuthUser {
   role: "admin" | "manager" | "operator" | "viewer"
   is_active: boolean
   last_login?: string
+  tenant_id: number
 }
 
 export interface LoginCredentials {
@@ -72,6 +73,7 @@ export async function signInWithPassword(credentials: LoginCredentials): Promise
       role: userData.role,
       is_active: userData.is_active,
       last_login: userData.last_login,
+      tenant_id: userData.tenant_id,
     }
   } catch (error) {
     console.error("Authentication error:", error)
@@ -135,6 +137,7 @@ export async function getUserProfile(userId: string, retryCount = 0): Promise<Au
       role: userData.role,
       is_active: userData.is_active,
       last_login: userData.last_login,
+      tenant_id: userData.tenant_id,
     }
   } catch (error) {
     // If this is a network/timeout error and we haven't exhausted retries, try again
