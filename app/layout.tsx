@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { TenantProvider } from "@/contexts/TenantContext"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -18,11 +19,13 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body>
-        <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <SidebarProvider>{children}</SidebarProvider>
-          </ThemeProvider>
-        </AuthProvider>
+        <TenantProvider>
+          <AuthProvider>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+              <SidebarProvider>{children}</SidebarProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </TenantProvider>
       </body>
     </html>
   )

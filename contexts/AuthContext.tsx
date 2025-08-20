@@ -31,23 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Set initial loading to true
     setLoading(true)
 
-    // onAuthStateChange handles everything: initial session, sign in, sign out, token refresh
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("=== AUTH STATE CHANGE ===", { event, session })
 
-      // Handle specific events
       if (event === "TOKEN_REFRESHED") {
-        console.log("Token refresh event:", { session })
-        
-        // If token refresh failed (session is null), sign out completely
         if (!session) {
           console.log("Token refresh failed, signing out...")
-          // Use setTimeout to avoid deadlock - move async call outside callback
           setTimeout(async () => {
             await clearExpiredTokens()
           }, 0)
@@ -64,24 +55,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // For INITIAL_SESSION, SIGNED_IN, and successful TOKEN_REFRESHED
       if (session?.user) {
         console.log("Valid session found, getting user profile...")
         
-        // Use setTimeout to avoid deadlock - move async call outside callback
-        setTimeout(async () => {
-          try {
-            const userProfile = await getUserProfile(session.user.id)
-            
-            console.log("AuthContext: User profile result:", userProfile ? "success" : "failed")
+        try {
+          const userProfile = await getUserProfile(session.user.id)
+          console.log("AuthContext: User profile result:", userProfile ? "success" : "failed")
+          
+          if (userProfile) {
             setUser(userProfile)
-          } catch (profileError) {
-            console.error("AuthContext: Error getting user profile:", profileError)
+          } else {
             setUser(null)
-          } finally {
-            setLoading(false)
           }
-        }, 0)
+        } catch (error) {
+          console.error("AuthContext: Error in auth state change:", error)
+          setUser(null)
+        } finally {
+          setLoading(false)
+        }
       } else {
         console.log("No valid session")
         setUser(null)
@@ -98,16 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true)
       setError(null)
-
       
-
-      // Real authentication with Supabase
-      const authUser = await signInWithPassword({ email, password })
-      setUser(authUser)
-    } catch (error) {
+      const user = await signInWithPassword({ email, password })
+      setUser(user)
+      
+    } catch (err) {
+      const error = err as Error
       console.error("Sign in error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Error de autenticación"
-      setError(errorMessage)
+      setError(error.message || "Failed to sign in")
       throw error
     } finally {
       setLoading(false)
@@ -117,16 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true)
-      setError(null)
-
-      
-
       await signOutApi()
       setUser(null)
     } catch (error) {
       console.error("Sign out error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Error al cerrar sesión"
-      setError(errorMessage)
       throw error
     } finally {
       setLoading(false)
@@ -137,8 +120,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true)
       setError(null)
-
-      
 
       // Try to sign in with demo credentials in real Supabase
       await signIn("demo@pms.com", "demo123456")

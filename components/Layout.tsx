@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { useAuthRedirect } from "@/hooks/useAuthRedirect"
-import { PropertyProvider } from "@/contexts/PropertyContext"
+import { PropertyProvider, useProperty } from "@/contexts/PropertyContext"
 import { PropertySelector } from "@/components/PropertySelector"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/toaster"
@@ -106,10 +106,11 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
 function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void }) {
   const { user } = useAuth()
+  const { selectedProperty, loading } = useProperty()
 
   return (
     <header className="flex h-20 items-center justify-between border-b border-white/20 bg-white/60 backdrop-blur-xl px-4 md:px-8 shadow-lg">
-      <div className="flex items-center space-x-4 md:space-x-6">
+      <div className="flex items-center space-x-4 md:px-6">
         {/* Botón hamburguesa para móvil */}
         <Button
           variant="outline"
@@ -128,7 +129,19 @@ function HeaderContent({ onMobileMenuToggle }: { onMobileMenuToggle: () => void 
         </div>
       </div>
       
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-6">
+        {/* Propiedad Seleccionada Info */}
+        {loading ? (
+          <div className="hidden md:flex items-center space-x-2">
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+          </div>
+        ) : selectedProperty ? (
+          <div className="hidden md:flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+            <Building2 className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-800">{selectedProperty.name}</span>
+          </div>
+        ) : null}
+        
         {/* Avatar del usuario */}
         <div className="relative h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center ring-2 ring-blue-200">
           <User className="h-5 w-5 text-white" />

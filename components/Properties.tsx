@@ -76,15 +76,12 @@ export default function Properties() {
 
   const fetchProperties = async () => {
     try {
-      
-
       const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
 
       setProperties(data || [])
     } catch (error) {
-      console.error("Error fetching properties:", error)
       toast({
         title: "Error",
         description: "No se pudieron cargar las propiedades",
@@ -160,7 +157,7 @@ export default function Properties() {
               </Badge>
               {property.cover_image && (
                 <div className="absolute top-2 left-2">
-                  <Badge variant="secondary" className="bg-black/50 text-white">
+                  <Badge variant="secondary" className="text-xs">
                     <Star className="h-3 w-3 mr-1" />
                     Portada
                   </Badge>
@@ -414,8 +411,6 @@ function PropertyDialog({
     e.preventDefault()
 
     try {
-      
-
       if (property) {
         // Remove cover_image from formData as it doesn't exist in the database
         const { cover_image, ...propertyData } = formData
@@ -427,15 +422,13 @@ function PropertyDialog({
           max_stay: availabilityData.max_nights,
         }
         
-        console.log("Updating property with data:", propertyDataWithAvailability)
         const { data: updateData, error } = await supabase
           .from("properties")
           .update(propertyDataWithAvailability)
           .eq("id", property.id)
           .select()
-        console.log("Update result:", { data: updateData, error })
+        
         if (error) {
-          console.error("Supabase update error:", error)
           throw error
         }
       } else {
@@ -449,16 +442,13 @@ function PropertyDialog({
           max_stay: availabilityData.max_nights,
         }
         
-        console.log("Creating property with data:", propertyDataWithAvailability)
         const { data: newProperty, error } = await supabase
           .from("properties")
           .insert([propertyDataWithAvailability])
           .select()
           .single()
 
-        console.log("Create result:", { data: newProperty, error })
         if (error) {
-          console.error("Supabase create error:", error)
           throw error
         }
       }
@@ -470,12 +460,6 @@ function PropertyDialog({
       onSave()
       onClose()
     } catch (error) {
-      console.error("Error saving property:", error)
-      console.error("Error type:", typeof error)
-      console.error("Error constructor:", error?.constructor?.name)
-      console.error("Error message:", error?.message)
-      console.error("Error details:", JSON.stringify(error, null, 2))
-      
       let errorMessage = "No se pudo guardar la propiedad"
       if (error instanceof Error) {
         errorMessage = error.message
@@ -905,10 +889,10 @@ function PropertyDialog({
         </Tabs>
 
         <div className="flex justify-end space-x-2 pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
             Cancelar
           </Button>
-          <Button type="submit">{property ? "Actualizar" : "Crear"} Propiedad</Button>
+          <Button type="submit" className="bg-blue-600 hover:bg-blue-700">{property ? "Actualizar" : "Crear"} Propiedad</Button>
         </div>
       </form>
     </>

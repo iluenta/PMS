@@ -189,8 +189,6 @@ export default function Bookings() {
 
   const fetchData = async () => {
     try {
-      console.log("🔄 Fetching reservations data...")
-      
       // Build query based on selected property
       let query = supabase
         .from("reservations")
@@ -206,22 +204,15 @@ export default function Bookings() {
       // Filter by selected property if available
       if (selectedProperty) {
         query = query.eq("property_id", selectedProperty.id)
-        console.log("🎯 Filtering reservations for property:", selectedProperty.name, "ID:", selectedProperty.id)
       }
 
       const { data: reservationsData, error: reservationsError } = await query
-
-      console.log("📊 Reservations data:", reservationsData)
-      console.log("❌ Reservations error:", reservationsError)
 
       // Fetch properties for the form
       const { data: propertiesData, error: propertiesError } = await supabase
         .from("properties")
         .select("*")
         .eq("status", "active")
-
-      console.log("🏠 Properties data:", propertiesData)
-      console.log("❌ Properties error:", propertiesError)
 
       if (reservationsData) {
         // Transform reservations data to match our Booking interface
@@ -263,20 +254,6 @@ export default function Bookings() {
           }
         })
         
-        console.log("✅ Transformed reservations count:", transformedReservations.length)
-        
-        // Log específico para debugging - mostrar los primeros 3 registros
-        if (transformedReservations.length > 0) {
-          console.log("🔍 Sample reservation data:", transformedReservations.slice(0, 3).map(r => ({
-            id: r.id,
-            booking_source: r.booking_source,
-            total_amount: r.total_amount,
-            channel_commission: r.channel_commission,
-            collection_commission: r.collection_commission,
-            guest_name: r.guest ? `${r.guest.first_name} ${r.guest.last_name}` : 'No guest'
-          })))
-        }
-        
         setBookings(transformedReservations)
       }
       
@@ -296,30 +273,13 @@ export default function Bookings() {
             .eq("reservation_id", reservation.id)
           
           // Usar solo pagos completados para el cálculo
-          const validPayments = allPaymentsData?.filter(p => p.status === 'completed') || []
+          const validPayments = allPaymentsData?.filter(p => p?.status === 'completed') || []
           
           if (validPayments.length > 0) {
             paymentsMap[reservation.id] = validPayments
-            console.log("💰 Found", validPayments.length, "valid payments for reservation", reservation.id, ":", validPayments.map(p => ({ id: p.id, amount: p.amount, status: p.status })))
           } else {
             paymentsMap[reservation.id] = []
-            console.log("⚠️ No valid payments found for reservation", reservation.id)
           }
-        }
-        
-        console.log("📊 Payments map created with", Object.keys(paymentsMap).length, "reservations")
-        
-        // Log específico para debugging - mostrar los pagos encontrados
-        const paymentsWithData = Object.entries(paymentsMap).filter(([id, payments]) => payments.length > 0)
-        if (paymentsWithData.length > 0) {
-          console.log("🔍 Sample payments data:", paymentsWithData.slice(0, 3).map(([id, payments]) => ({
-            reservation_id: id,
-            payments_count: payments.length,
-            total_amount: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
-            payments: payments.map(p => ({ id: p.id, amount: p.amount, status: p.status }))
-          })))
-        } else {
-          console.log("⚠️ No payments found for any reservations")
         }
         
         setReservationPayments(paymentsMap)
@@ -327,14 +287,11 @@ export default function Bookings() {
 
       // If no data exists, show information about it
       if (!reservationsData || reservationsData.length === 0) {
-        console.log("ℹ️ No reservations found in database")
       }
       if (!propertiesData || propertiesData.length === 0) {
-        console.log("ℹ️ No properties found in database")
       }
 
     } catch (error) {
-      console.error("💥 Error fetching data:", error)
     } finally {
       setLoading(false)
     }
@@ -409,21 +366,16 @@ export default function Bookings() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
       try {
-        
-
         const { error } = await supabase
           .from("reservations")
           .delete()
           .eq("id", id)
 
         if (error) {
-          console.error("Error deleting booking:", error)
         } else {
-          console.log("Booking deleted successfully")
           fetchData()
         }
       } catch (error) {
-        console.error("Error deleting booking:", error)
       }
     }
   }
@@ -508,7 +460,7 @@ export default function Bookings() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleAdd} variant="default">
               <Plus className="h-4 w-4 mr-2" />
               Nueva Reserva
             </Button>
@@ -773,7 +725,7 @@ export default function Bookings() {
             <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No hay reservas</h3>
             <p className="text-gray-500 mb-4">Las reservas aparecerán aquí cuando las recibas</p>
-            <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleAdd} variant="default">
               <Plus className="h-4 w-4 mr-2" />
               Nueva Reserva
             </Button>
@@ -904,10 +856,6 @@ function BookingDialog({
         channel_commission: booking.channel_commission || 0,
         collection_commission: booking.collection_commission || 0,
       }
-      console.log("🎯 Setting form data for editing:", {
-        booking_source: formDataToSet.booking_source,
-        booking: booking
-      })
       setFormData(formDataToSet)
     } else {
       // Creating new booking - use selected property from context
@@ -982,12 +930,9 @@ function BookingDialog({
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
-      console.log("🔄 Loading property channels for property:", propertyId)
       const channels = await getPropertyChannels(propertyId)
-      console.log("📋 Available channels loaded:", channels)
       setAvailableChannels(channels)
     } catch (error) {
-      console.error("Error loading channels:", error)
       setAvailableChannels([])
     }
   }
@@ -1008,7 +953,6 @@ function BookingDialog({
         collection_commission: collectionCommission,
       }))
     } catch (error) {
-      console.error("Error calculating commissions:", error)
     } finally {
       setCalculatingCommissions(false)
     }
@@ -1052,7 +996,6 @@ function BookingDialog({
           } as any)
           ;(formData as any)._picked_person = updated
         } catch (e) {
-          console.warn('No se pudo actualizar el huésped seleccionado:', e)
         }
       } else if (formData.guest_name || formData.guest_email || formData.guest_phone) {
         // Crear persona mínima si no hay id
@@ -1085,11 +1028,6 @@ function BookingDialog({
 
       // Get property_channel ID from channel name and property
       let property_channel_id = null
-      console.log("🔍 Looking for property_channel_id for:", {
-        property_id: formData.property_id,
-        booking_source: formData.booking_source
-      })
-      
       try {
         // First, get all property channels for this property
         const { data: allChannels, error: channelsError } = await supabase
@@ -1097,95 +1035,57 @@ function BookingDialog({
           .select("id, distribution_channels(name)")
           .eq("property_id", formData.property_id)
         
-        console.log("📋 All property channels found:", allChannels)
-        console.log("📋 Channels error:", channelsError)
-        
         if (channelsError) {
-          console.error("❌ Error fetching property_channels:", channelsError)
-          // If RLS error, try to create the channel anyway
-          if (channelsError.code === 'PGRST116') {
-            console.log("🔧 RLS error detected, attempting to create channel...")
-          } else {
-            property_channel_id = null
-          }
+          property_channel_id = null
         }
         
-                  // For "Direct" bookings, look for "Propio" channel
-          const channelNameToFind = formData.booking_source === "Direct" ? "Propio" : formData.booking_source
-        console.log("🔍 Looking for channel name:", channelNameToFind)
+        // For "Direct" bookings, look for "Propio" channel
+        const channelNameToFind = formData.booking_source === "Direct" ? "Propio" : formData.booking_source
         
         // Find the channel that matches the booking_source
         const matchingChannel = allChannels?.find(channel => 
           (channel.distribution_channels as any)?.name === channelNameToFind
         )
         
-        console.log("🔍 Matching channel found:", matchingChannel)
-        console.log("🔍 All channels for debugging:", allChannels?.map(c => ({
-          id: c.id,
-          name: (c.distribution_channels as any)?.name
-        })))
-        
         if (matchingChannel) {
           property_channel_id = matchingChannel.id
-          console.log("✅ Found matching property_channel_id:", property_channel_id, "for channel:", channelNameToFind)
         } else {
-                      // If no matching channel found and it's "Direct", create one
-            if (formData.booking_source === "Direct") {
-              console.log("🔧 Creating Propio channel for property:", formData.property_id)
-              
-              // First, get the "Propio" distribution channel
-              const { data: propioChannel, error: propioError } = await supabase
-                .from("distribution_channels")
+          // If no matching channel found and it's "Direct", create one
+          if (formData.booking_source === "Direct") {
+            // First, get the "Propio" distribution channel
+            const { data: propioChannel, error: propioError } = await supabase
+              .from("distribution_channels")
+              .select("id")
+              .eq("name", "Propio")
+              .single()
+            
+            if (propioError) {
+              property_channel_id = null
+            } else if (propioChannel) {
+              // Create property_channel entry for Propio
+              const { data: newPropertyChannel, error: createError } = await supabase
+                .from("property_channels")
+                .insert([{
+                  property_id: formData.property_id,
+                  channel_id: propioChannel.id,
+                  is_enabled: true
+                }])
                 .select("id")
-                .eq("name", "Propio")
                 .single()
               
-              console.log("🔍 Propio distribution channel query result:", { propioChannel, propioError })
-              
-              if (propioError) {
-                console.error("❌ Error fetching Propio distribution channel:", propioError)
+              if (createError) {
                 property_channel_id = null
-              } else if (propioChannel) {
-                console.log("✅ Found Propio distribution channel:", propioChannel)
-                
-                // Create property_channel entry for Propio
-                const { data: newPropertyChannel, error: createError } = await supabase
-                  .from("property_channels")
-                  .insert([{
-                    property_id: formData.property_id,
-                    channel_id: propioChannel.id,
-                    is_enabled: true
-                  }])
-                  .select("id")
-                  .single()
-                
-                console.log("🔍 Property channel creation result:", { newPropertyChannel, createError })
-                
-                if (createError) {
-                  console.error("❌ Error creating property_channel for Propio:", createError)
-                  console.error("🔍 Create error details:", {
-                    message: createError.message,
-                    details: createError.details,
-                    hint: createError.hint,
-                    code: createError.code
-                  })
-                  property_channel_id = null
-                } else {
-                  property_channel_id = newPropertyChannel.id
-                  console.log("✅ Created property_channel_id for Propio:", property_channel_id)
-                }
               } else {
-                console.error("❌ Propio distribution channel not found")
-                property_channel_id = null
+                property_channel_id = newPropertyChannel.id
               }
+            } else {
+              property_channel_id = null
+            }
           } else {
-            console.error("❌ No matching channel found for:", formData.booking_source)
-            console.log("📋 Available channels:", allChannels?.map(c => (c.distribution_channels as any)?.name))
             property_channel_id = null
           }
         }
       } catch (error) {
-        console.error("❌ Exception in property_channel query:", error)
         property_channel_id = null
       }
 
@@ -1216,12 +1116,9 @@ function BookingDialog({
 
       // Ensure we have a valid property_channel_id
       if (!property_channel_id) {
-        console.error("❌ No valid property_channel_id found for booking_source:", formData.booking_source)
         alert("Error: No se pudo encontrar o crear el canal de distribución. Por favor, verifica la configuración del canal.")
         return
       }
-
-      console.log("📤 Submitting reservation data:", submitData)
 
       if (booking) {
         const { error } = await supabase
@@ -1230,61 +1127,21 @@ function BookingDialog({
           .eq("id", booking.id)
         
         if (error) {
-          console.error("❌ Error updating reservation:", error)
-          console.error("📊 Error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          })
-          
-          // Crear un error más descriptivo
-          const errorMessage = error.message || "Error desconocido al actualizar la reserva"
-          const enhancedError = new Error(`Error updating reservation: ${errorMessage}`)
-          enhancedError.cause = error
-          throw enhancedError
         }
-        console.log("✅ Reservation updated successfully")
+        onSave()
+        onClose()
       } else {
         const { error } = await supabase
           .from("reservations")
           .insert([submitData])
         
         if (error) {
-          console.error("❌ Error creating reservation:", error)
-          console.error("📊 Error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          })
-          
-          // Crear un error más descriptivo
-          const errorMessage = error.message || "Error desconocido al crear la reserva"
-          const enhancedError = new Error(`Error creating reservation: ${errorMessage}`)
-          enhancedError.cause = error
-          throw enhancedError
         }
-        console.log("✅ Reservation created successfully")
+        onSave()
+        onClose()
       }
-
-      onSave()
-      onClose()
     } catch (error) {
-      console.error("💥 Error saving reservation:", error)
-      
-      let errorMessage = "Error desconocido al guardar la reserva"
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'object' && error !== null) {
-        // Intentar extraer información del objeto de error
-        const errorObj = error as any
-        errorMessage = errorObj.message || errorObj.details || errorObj.hint || JSON.stringify(errorObj)
-      }
-      
-      console.error("📋 Full error object:", error)
-      alert(`Error al guardar la reserva: ${errorMessage}`)
+      alert(`Error al guardar la reserva: ${error.message}`)
     }
   }
 
@@ -1347,11 +1204,6 @@ function BookingDialog({
 
   const loadCommissionPercentages = async () => {
     try {
-      console.log("🔍 Loading commission percentages for:", {
-        property_id: formData.property_id,
-        booking_source: formData.booking_source
-      })
-
       // Primero, obtener todos los property_channels para esta propiedad
       const { data: allChannels, error: channelsError } = await supabase
         .from("property_channels")
@@ -1364,19 +1216,14 @@ function BookingDialog({
         .eq("property_id", formData.property_id)
 
       if (channelsError) {
-        console.error("❌ Error fetching property_channels:", channelsError)
         setCommissionPercentages({ sale: null, charge: null })
         return
       }
-
-      console.log("📋 All channels for property:", allChannels)
 
       // Buscar el canal que coincida con el booking_source
       const matchingChannel = allChannels?.find(channel => 
         (channel.distribution_channels as any)?.name === formData.booking_source
       )
-
-      console.log("🎯 Matching channel:", matchingChannel)
 
       if (matchingChannel) {
         setCommissionPercentages({
@@ -1391,31 +1238,15 @@ function BookingDialog({
         const chargeCommission = matchingChannel.commission_override_charge ? 
           Math.round((baseAmount * matchingChannel.commission_override_charge / 100) * 100) / 100 : 0
 
-        console.log("💰 Calculated commissions:", {
-          baseAmount,
-          saleCommission,
-          chargeCommission,
-          salePercentage: matchingChannel.commission_override_sale,
-          chargePercentage: matchingChannel.commission_override_charge
-        })
-
-        setFormData(prev => {
-          console.log("🔄 Updating formData with commissions:", {
-            previous: { channel_commission: prev.channel_commission, collection_commission: prev.collection_commission },
-            new: { channel_commission: saleCommission, collection_commission: chargeCommission }
-          })
-          return {
-            ...prev,
-            channel_commission: saleCommission,
-            collection_commission: chargeCommission
-          }
-        })
+        setFormData(prev => ({
+          ...prev,
+          channel_commission: saleCommission,
+          collection_commission: chargeCommission
+        }))
       } else {
-        console.log("❌ No matching channel found for:", formData.booking_source)
         setCommissionPercentages({ sale: null, charge: null })
       }
     } catch (error) {
-      console.error("❌ Error in loadCommissionPercentages:", error)
       setCommissionPercentages({ sale: null, charge: null })
     }
   }
@@ -1440,7 +1271,6 @@ function BookingDialog({
       }
       return 0
     } catch (error) {
-      console.error("Error calculating channel commission:", error)
       return 0
     }
   }
@@ -1461,7 +1291,6 @@ function BookingDialog({
       }
       return 0
     } catch (error) {
-      console.error("Error calculating collection commission:", error)
       return 0
     }
   }
@@ -1755,8 +1584,6 @@ function BookingDialog({
                           // NOTA: NO filtrar 'Propio' porque es un canal válido
                         });
                       
-                      console.log("🎯 Filtered channels for select:", filteredChannels.map(c => c.channel?.name));
-                      
                       return filteredChannels.map((channel) => (
                         <SelectItem key={channel.id} value={channel.channel?.name || ''}>
                           {channel.channel?.name || ''}
@@ -1858,7 +1685,7 @@ function BookingDialog({
                         onChange={(e) => setFormData({ ...formData, channel_commission: parseFloat(e.target.value) || 0 })}
                         placeholder="0.00"
                         className={`h-10 ${commissionPercentages.sale !== null ? 'bg-blue-50 border-blue-200' : ''}`}
-                        onFocus={() => console.log("🔍 Channel commission field value:", formData.channel_commission)}
+                        onFocus={() => {}}
                       />
                       {commissionPercentages.sale !== null && (
                         <div className="text-xs text-blue-600">
@@ -1883,7 +1710,7 @@ function BookingDialog({
                         onChange={(e) => setFormData({ ...formData, collection_commission: parseFloat(e.target.value) || 0 })}
                         placeholder="0.00"
                         className={`h-10 ${commissionPercentages.charge !== null ? 'bg-blue-50 border-blue-200' : ''}`}
-                        onFocus={() => console.log("🔍 Collection commission field value:", formData.collection_commission)}
+                        onFocus={() => {}}
                       />
                       {commissionPercentages.charge !== null && (
                         <div className="text-xs text-blue-600">
@@ -1984,7 +1811,7 @@ function BookingDialog({
           <Button type="button" variant="outline" onClick={onClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
             Cancelar
           </Button>
-          <Button type="submit" disabled={calculatingCommissions} className="bg-blue-600 hover:bg-blue-700">
+          <Button type="submit" disabled={calculatingCommissions} variant="default">
             {calculatingCommissions ? "Calculando..." : (booking ? "Actualizar" : "Crear")} Reserva
           </Button>
         </div>
@@ -1992,4 +1819,3 @@ function BookingDialog({
     </DialogContent>
   )
 }
-
