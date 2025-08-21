@@ -3,6 +3,75 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js"
 // No demo data in production repository
 
 // ============================================================================
+// Connection Health Management
+// ============================================================================
+
+let lastConnectionCheck = 0
+const CONNECTION_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * Check if the Supabase connection is healthy
+ */
+async function checkConnectionHealth(supabaseClient: SupabaseClient): Promise<boolean> {
+  // Don't check too frequently
+  if (Date.now() - lastConnectionCheck < CONNECTION_CHECK_INTERVAL) {
+    return true
+  }
+
+  try {
+    lastConnectionCheck = Date.now()
+    console.log('🔍 Checking Supabase connection health...')
+    
+    // Use a simple query to test connection with timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Health check timeout')), 5000) // 5 second timeout
+    })
+    
+    const healthCheckPromise = supabaseClient
+      .from('users')
+      .select('id')
+      .limit(1)
+    
+    // Race between health check and timeout
+    const { error } = await Promise.race([healthCheckPromise, timeoutPromise])
+    
+    if (error) {
+      // Log error without exposing sensitive details
+      console.warn('Connection health check failed')
+      return false
+    }
+    
+    return true
+  } catch (error) {
+    // Handle network errors silently to avoid exposing system details
+    return false
+  }
+}
+
+/**
+ * Get a healthy Supabase client, reinitializing if necessary
+ */
+async function getHealthySupabaseClient(): Promise<SupabaseClient> {
+  if (!supabase) {
+    return getSupabaseClient()
+  }
+
+  try {
+    const isHealthy = await checkConnectionHealth(supabase)
+    if (!isHealthy) {
+      supabase = null
+      return getSupabaseClient()
+    }
+
+    return supabase
+  } catch (error) {
+    // If health check fails completely, reinitialize as fallback
+    supabase = null
+    return getSupabaseClient()
+  }
+}
+
+// ============================================================================
 // Supabase Client Initialization (Singleton Pattern)
 // ============================================================================
 
@@ -53,6 +122,33 @@ function getSupabaseClient() {
 
 // Initialize the client
 const supabaseClient = getSupabaseClient()
+
+// ============================================================================
+// Heartbeat to keep connection alive
+// ============================================================================
+
+// Only run heartbeat on the server side
+if (typeof window === 'undefined') {
+  setInterval(async () => {
+    try {
+      await checkConnectionHealth(supabaseClient)
+    } catch (error) {
+      // Silent heartbeat check to avoid exposing system details
+    }
+  }, 10 * 60 * 1000) // Every 10 minutes (less aggressive)
+}
+
+// ============================================================================
+// Export function to get healthy client
+// ============================================================================
+
+/**
+ * Get a healthy Supabase client for database operations
+ * This function ensures the connection is healthy before returning the client
+ */
+export async function getSupabase(): Promise<SupabaseClient> {
+  return await getHealthySupabaseClient()
+}
 
 // ============================================================================
 // No demo mode
@@ -395,7 +491,7 @@ export interface Invoice {
 export async function clearExpiredTokens() {
   if (supabaseClient) {
     await supabaseClient.auth.signOut()
-    console.log("Expired tokens cleared, user signed out.")
+
   }
 }
 
@@ -503,7 +599,7 @@ export function calculateReservationAmounts(reservation: Reservation) {
  */
 export async function getChannelCommissions(propertyId: string, channelName: string) {
   try {
-    console.log("🔄 Getting channel commissions for:", { propertyId, channelName })
+
 
     // First, get the channel ID from distribution_channels
     const { data: channels, error: channelError } = await supabaseClient
@@ -602,7 +698,7 @@ export async function calculateBookingFinancials(
  */
 export async function getPropertyChannels(propertyId: string) {
   try {
-    console.log("🔄 Getting property channels for property:", propertyId)
+
 
     const { data, error } = await supabaseClient
       .from("property_channels")

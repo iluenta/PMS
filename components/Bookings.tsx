@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +29,7 @@ import {
 import { getPropertyChannels } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
 import { useProperty } from "@/hooks/useProperty"
+import { useAuth } from "@/contexts/AuthContext"
 import { 
   Calendar, 
   Plus, 
@@ -52,6 +53,8 @@ import {
 import { GuestPicker } from '@/components/people/GuestPicker'
 
 export default function Bookings() {
+
+  
   const [bookings, setBookings] = useState<Booking[]>([])
   const [properties, setProperties] = useState<Property[]>([])
   const [guests, setGuests] = useState<Guest[]>([])
@@ -69,6 +72,32 @@ export default function Bookings() {
 
   // Global property context
   const { selectedProperty } = useProperty()
+  const { user, loading: authLoading } = useAuth()
+  
+  // Debug: verificar que el contexto de autenticación funciona
+  
+  // Si la autenticación está cargando, mostrar spinner
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+  
+  // Si no hay usuario autenticado, mostrar mensaje
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No autenticado</h2>
+          <p className="text-gray-600">Debes iniciar sesión para acceder a las reservas</p>
+        </div>
+      </div>
+    )
+  }
+  
+
 
   // Filtered and sorted bookings
   const filteredBookings = useMemo(() => {
@@ -183,14 +212,12 @@ export default function Bookings() {
     }
   }, [filteredBookings])
 
-  useEffect(() => {
-    fetchData()
-  }, [selectedProperty])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      // Build query based on selected property
-      let query = supabase
+      setLoading(true)
+      
+      // Build query - FILTRAR por tenant_id del usuario autenticado
+      const query = supabase
         .from("reservations")
         .select(`
           *,
@@ -199,20 +226,25 @@ export default function Bookings() {
             channel:distribution_channels(*)
           )
         `)
+        .eq("tenant_id", user?.tenant_id) // FILTRO CRÍTICO DE SEGURIDAD
         .order("created_at", { ascending: false })
-
-      // Filter by selected property if available
-      if (selectedProperty) {
-        query = query.eq("property_id", selectedProperty.id)
-      }
 
       const { data: reservationsData, error: reservationsError } = await query
 
-      // Fetch properties for the form
+      if (reservationsError) {
+        console.error("Error fetching reservations:", reservationsError)
+      }
+
+      // Fetch properties for the form (only from current tenant)
       const { data: propertiesData, error: propertiesError } = await supabase
         .from("properties")
         .select("*")
         .eq("status", "active")
+        .eq("tenant_id", user?.tenant_id)
+
+      if (propertiesError) {
+        console.error("Error fetching properties:", propertiesError)
+      }
 
       if (reservationsData) {
         // Transform reservations data to match our Booking interface
@@ -258,28 +290,36 @@ export default function Bookings() {
       }
       
       if (propertiesData) setProperties(propertiesData)
-      // No longer fetch guests since we don't use that table
-      setGuests([]) // Set empty array since we handle guest data differently
-
-      // Fetch payments for each reservation
+      
+      // Set empty array since we handle guest data differently
+      setGuests([])
+      
+      // Fetch payments for all reservations in one query (optimized)
       if (reservationsData && reservationsData.length > 0) {
+        const reservationIds = reservationsData.map(r => r.id)
+        
+        // Single query for all payments
+        const { data: allPaymentsData, error: paymentsError } = await supabase
+          .from("payments")
+          .select("*")
+          .in("reservation_id", reservationIds)
+          .eq("status", "completed") // Only get completed payments
+
+        // Group payments by reservation_id
         const paymentsMap: {[key: string]: any[]} = {}
         
-        for (const reservation of reservationsData) {
-          // Obtener todos los pagos para esta reserva
-          const { data: allPaymentsData, error: paymentsError } = await supabase
-            .from("payments")
-            .select("*")
-            .eq("reservation_id", reservation.id)
-          
-          // Usar solo pagos completados para el cálculo
-          const validPayments = allPaymentsData?.filter(p => p?.status === 'completed') || []
-          
-          if (validPayments.length > 0) {
-            paymentsMap[reservation.id] = validPayments
-          } else {
-            paymentsMap[reservation.id] = []
-          }
+        // Initialize all reservations with empty arrays
+        reservationIds.forEach(id => {
+          paymentsMap[id] = []
+        })
+        
+        // Group payments by reservation_id
+        if (allPaymentsData) {
+          allPaymentsData.forEach(payment => {
+            if (payment.reservation_id && paymentsMap[payment.reservation_id]) {
+              paymentsMap[payment.reservation_id].push(payment)
+            }
+          })
         }
         
         setReservationPayments(paymentsMap)
@@ -287,15 +327,28 @@ export default function Bookings() {
 
       // If no data exists, show information about it
       if (!reservationsData || reservationsData.length === 0) {
+        // No reservations found
       }
       if (!propertiesData || propertiesData.length === 0) {
+        // No properties found
       }
-
     } catch (error) {
+      console.error("Error fetching data:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.tenant_id])
+
+  useEffect(() => {
+    if (user?.tenant_id) {
+      fetchData()
+    }
+  }, [user?.tenant_id, fetchData])
+
+  // Memoize properties to avoid unnecessary re-renders
+  const memoizedProperties = useMemo(() => properties, [properties])
+  const memoizedGuests = useMemo(() => guests, [guests])
+  const memoizedReservationPayments = useMemo(() => reservationPayments, [reservationPayments])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -467,11 +520,11 @@ export default function Bookings() {
           </DialogTrigger>
           <BookingDialog
             booking={editingBooking}
-            properties={properties}
-            guests={guests}
+            properties={memoizedProperties}
+            guests={memoizedGuests}
             onClose={() => setIsDialogOpen(false)}
             onSave={fetchData}
-            reservationPayments={reservationPayments}
+            reservationPayments={memoizedReservationPayments}
             calculatePaymentInfo={calculatePaymentInfo}
           />
         </Dialog>
@@ -759,6 +812,18 @@ function BookingDialog({
   }
 }) {
   const { selectedProperty } = useProperty()
+  const { user, loading: authLoading } = useAuth()
+  
+  // Debug: verificar que el contexto de autenticación funciona en BookingDialog
+  // Comentado temporalmente para evitar spam en consola
+  // console.log('BookingDialog - user context:', user)
+  // console.log('BookingDialog - user?.tenant_id:', user?.tenant_id)
+  // console.log('BookingDialog - authLoading:', authLoading)
+  
+  // Si la autenticación está cargando o no hay usuario, no mostrar el diálogo
+  if (authLoading || !user) {
+    return null
+  }
   const [formData, setFormData] = useState({
     property_id: "",
     guest_name: "",
@@ -796,8 +861,8 @@ function BookingDialog({
     charge: number | null;
   }>({ sale: null, charge: null   })
 
-  // Funciones para el estado del pago
-  const getPaymentStatusColor = (status: string) => {
+  // Funciones para el estado del pago - estabilizadas con useCallback
+  const getPaymentStatusColor = useCallback((status: string) => {
     switch (status) {
       case "paid":
         return "bg-green-100 text-green-800"
@@ -810,9 +875,9 @@ function BookingDialog({
       default:
         return "bg-gray-100 text-gray-800"
     }
-  }
+  }, [])
 
-  const getPaymentStatusIcon = (status: string) => {
+  const getPaymentStatusIcon = useCallback((status: string) => {
     switch (status) {
       case "paid":
         return <CheckCircle className="h-3 w-3" />
@@ -825,7 +890,7 @@ function BookingDialog({
       default:
         return <Clock className="h-3 w-3" />
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (booking) {
@@ -1008,6 +1073,7 @@ function BookingDialog({
             email: formData.guest_email || undefined,
             phone: formData.guest_phone || undefined,
             country: formData.guest_country || undefined,
+            tenant_id: user?.tenant_id, // Agregar tenant_id del usuario autenticado
           })
           personId = created.id
           ;(formData as any)._picked_person = created
@@ -1111,7 +1177,8 @@ function BookingDialog({
         collection_commission: formData.collection_commission,
         external_source: formData.booking_source,
         external_id: formData.external_id || null,
-        person_id: personId
+        person_id: personId,
+        tenant_id: user?.tenant_id // Agregar tenant_id del usuario autenticado
       }
 
       // Ensure we have a valid property_channel_id
@@ -1261,9 +1328,12 @@ function BookingDialog({
     try {
       const { data: propertyChannel } = await supabase
         .from("property_channels")
-        .select("commission_override_sale")
+        .select(`
+          commission_override_sale,
+          channel:distribution_channels(name)
+        `)
         .eq("property_id", formData.property_id)
-        .eq("distribution_channels.name", formData.booking_source)
+        .eq("channel.name", formData.booking_source)
         .single()
 
       if (propertyChannel?.commission_override_sale && formData.base_amount > 0) {
@@ -1281,9 +1351,12 @@ function BookingDialog({
     try {
       const { data: propertyChannel } = await supabase
         .from("property_channels")
-        .select("commission_override_charge")
+        .select(`
+          commission_override_charge,
+          channel:distribution_channels(name)
+        `)
         .eq("property_id", formData.property_id)
-        .eq("distribution_channels.name", formData.booking_source)
+        .eq("channel.name", formData.booking_source)
         .single()
 
       if (propertyChannel?.commission_override_charge && formData.base_amount > 0) {

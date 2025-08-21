@@ -18,13 +18,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
 import { useProperty } from "@/hooks/useProperty"
+import { useAuth } from "@/contexts/AuthContext"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
 
 export default function Payments() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   // Filtros
   const [searchTerm, setSearchTerm] = useState("")
@@ -34,6 +35,7 @@ export default function Payments() {
   const [sortFilter, setSortFilter] = useState<string>("date_desc")
 
   const { selectedProperty } = useProperty()
+  const { user } = useAuth()
   // Actualiza el campo reservations.payment_status basado en pagos "completed"
   const updateReservationPaymentStatus = async (reservationId: string) => {
     if (!reservationId) return
@@ -96,12 +98,20 @@ export default function Payments() {
 
   const fetchReservations = async (propertyId: string) => {
     try {
-      console.log("🔍 Fetching reservations for property:", propertyId)
+  
       
+      // Verificar que el usuario tenga tenant_id
+      if (!user?.tenant_id) {
+        console.warn("⚠️ Usuario sin tenant_id, no se pueden cargar reservas")
+        setReservations([])
+        return
+      }
+
       const { data, error } = await supabase
         .from("reservations")
         .select("*")
         .eq("property_id", propertyId)
+        .eq("tenant_id", user.tenant_id) // Filtrar por tenant_id
         .neq("status", "cancelled")
         .order("check_in", { ascending: false })
 
@@ -123,13 +133,21 @@ export default function Payments() {
   const fetchPayments = async (propertyId: string) => {
     try {
       setLoading(true)
-      console.log("🔍 Fetching payments for property:", propertyId)
+  
       
-      // Primero obtener todas las reservas de la propiedad
+      // Verificar que el usuario tenga tenant_id
+      if (!user?.tenant_id) {
+        console.warn("⚠️ Usuario sin tenant_id, no se pueden cargar pagos")
+        setPayments([])
+        return
+      }
+
+      // Primero obtener todas las reservas de la propiedad del tenant del usuario
       const { data: propertyReservations, error: reservationsError } = await supabase
         .from("reservations")
         .select("id")
         .eq("property_id", propertyId)
+        .eq("tenant_id", user.tenant_id) // Filtrar por tenant_id
 
       if (reservationsError) {
         console.error("❌ Error fetching property reservations:", reservationsError)
@@ -137,7 +155,7 @@ export default function Payments() {
       }
 
       const reservationIds = propertyReservations?.map(r => r.id) || []
-      console.log("📊 Found reservation IDs:", reservationIds)
+      
 
       if (reservationIds.length === 0) {
         console.log("📊 No reservations found for property, setting empty payments")
@@ -145,11 +163,12 @@ export default function Payments() {
         return
       }
 
-      // Luego obtener los pagos que correspondan a estas reservas
+      // Luego obtener los pagos que correspondan a estas reservas del tenant del usuario
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("payments")
         .select("*")
         .in("reservation_id", reservationIds)
+        .eq("tenant_id", user.tenant_id) // Filtrar por tenant_id
         .order("date", { ascending: false })
 
       if (paymentsError) {
@@ -172,18 +191,40 @@ export default function Payments() {
   // Función para calcular el progreso de pago de una reserva (solo pagos completados)
   const getReservationPaymentProgress = (reservationId: string) => {
     const reservationPayments = payments.filter(p => p.reservation_id === reservationId && p.status === 'completed')
-    const totalPaid = reservationPayments.reduce((sum, p) => sum + p.amount, 0)
+    const totalPaid = reservationPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
     const reservation = reservations.find(r => r.id === reservationId)
-    const totalAmount = reservation?.total_amount || 0
-    return { totalPaid, totalAmount, percentage: totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0 }
+    
+    if (!reservation) {
+      return { totalPaid, totalAmount: 0, percentage: 0 }
+    }
+    
+    // Usar calculateRequiredAmount en lugar de total_amount para obtener el importe real requerido
+    const totalAmount = calculateRequiredAmount(reservation)
+    
+    
+    
+    return { 
+      totalPaid, 
+      totalAmount, 
+      percentage: totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0 
+    }
   }
 
   // Función para obtener reservas no pagadas al 100%
   const getUnpaidReservations = () => {
-    return reservations.filter(reservation => {
+    const unpaid = reservations.filter(reservation => {
       const progress = getReservationPaymentProgress(reservation.id)
-      return progress.percentage < 100
+      const isUnpaid = progress.percentage < 100
+      
+      if (isUnpaid) {
+        console.log(`📋 Reserva no pagada: ${reservation.guest?.name} - ${progress.percentage.toFixed(1)}% pagado`)
+      }
+      
+      return isUnpaid
     })
+    
+    
+    return unpaid
   }
 
   // Helpers para filtros
@@ -321,16 +362,21 @@ export default function Payments() {
 
   const handleEdit = (payment: Payment) => {
     setEditingPayment(payment)
-    setIsDialogOpen(true)
+    setShowPaymentDialog(true)
   }
 
   const handleAdd = () => {
     console.log("➕ Opening new payment dialog")
     setEditingPayment(null)
-    setIsDialogOpen(true)
+    setShowPaymentDialog(true)
   }
 
-  const handleDelete = async (payment: Payment) => {
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!user?.tenant_id) {
+      console.error("❌ Usuario sin tenant_id, no se puede eliminar el pago")
+      return
+    }
+
     if (!confirm("¿Estás seguro de que quieres eliminar este pago? Esta acción no se puede deshacer.")) {
       return
     }
@@ -339,12 +385,13 @@ export default function Payments() {
       const { error } = await supabase
         .from("payments")
         .delete()
-        .eq("id", payment.id)
+        .eq("id", paymentId)
+        .eq("tenant_id", user.tenant_id) // Verificar que pertenece al tenant del usuario
 
       if (error) throw error
 
       // Si el pago eliminado estaba asociado a una reserva, recalcular su estado
-      if (payment.reservation_id) await updateReservationPaymentStatus(payment.reservation_id)
+      if (editingPayment?.reservation_id) await updateReservationPaymentStatus(editingPayment.reservation_id)
 
       // Recargar los datos
       if (selectedProperty) {
@@ -456,7 +503,7 @@ export default function Payments() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Pagos de {selectedProperty.name}</h2>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
               <DialogTrigger asChild>
                 <Button onClick={handleAdd} disabled={!selectedProperty} className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
@@ -472,7 +519,7 @@ export default function Payments() {
                 payments={payments}
                 onClose={() => {
                   console.log("🚪 Closing dialog and clearing state")
-                  setIsDialogOpen(false)
+                  setShowPaymentDialog(false)
                   setEditingPayment(null)
                 }}
                 onSave={() => fetchPayments(selectedProperty.id)}
@@ -557,7 +604,7 @@ export default function Payments() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(payment)}
+                        onClick={() => handleDeletePayment(payment.id)}
                         className="text-red-600 hover:text-red-700 h-8 px-2"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -599,98 +646,138 @@ function PaymentDialog({
   onClose: () => void
   onSave: () => void
 }) {
+  const { user } = useAuth()
   const [formData, setFormData] = useState({
+    reservation_id: "",
     customer_name: "",
-    amount: 0,
-    method: "credit_card" as Payment['method'],
-    status: "pending" as Payment['status'],
-    date: new Date().toISOString().split('T')[0],
+    amount: "",
+    method: "credit_card",
+    status: "completed",
+    date: new Date().toISOString().split("T")[0],
     reference: "",
     notes: "",
-    fee: 0,
-    reservation_id: "",
+    fee: "0",
   })
+  
+  // Estado para controlar si mostrar todas las reservas o solo las pendientes
+  const [showAllReservations, setShowAllReservations] = useState(false)
 
-  const { selectedProperty } = useProperty()
+  // Función para manejar el cambio del checkbox
+  const handleCheckboxChange = (checked: boolean) => {
+    console.log("✅ Checkbox cambiado:", checked)
+    setShowAllReservations(checked)
+  }
 
   // Función para limpiar el formulario
   const clearForm = () => {
     console.log("🧹 Clearing form data")
     setFormData({
+      reservation_id: "",
       customer_name: "",
-      amount: 0,
-      method: "credit_card" as Payment['method'],
-      status: "pending" as Payment['status'],
-      date: new Date().toISOString().split('T')[0],
+      amount: "",
+      method: "credit_card",
+      status: "completed",
+      date: new Date().toISOString().split("T")[0],
       reference: "",
       notes: "",
-      fee: 0,
-      reservation_id: "",
+      fee: "0",
     })
+    // Resetear el checkbox al crear un nuevo pago
+    setShowAllReservations(false)
   }
 
   // Función para obtener reservas no pagadas al 100% de la propiedad seleccionada
   const getUnpaidReservations = () => {
-    if (!selectedProperty) return []
+    if (!user?.tenant_id) return []
     
     return reservations.filter(reservation => {
       // Asegurar que la reserva pertenece a la propiedad seleccionada
-      if (reservation.property_id !== selectedProperty.id) return false
+      if (reservation.property_id !== propertyId) return false
       
-      const progress = getReservationPaymentProgress(reservation.id)
-      return progress.percentage < 100
+      // Calcular el progreso de pagos para esta reserva
+      const { totalPaid, totalAmount, percentage } = getReservationPaymentProgress(reservation.id)
+      
+      // Incluir reservas que no estén pagadas al 100%
+      return percentage < 100
     })
   }
 
-  // Función para auto-rellenar el nombre del huésped cuando se selecciona una reserva
-  const handleReservationChange = (reservationId: string) => {
-    const selectedReservation = reservations.find(r => r.id === reservationId)
-    console.log("🔍 Selected reservation:", selectedReservation)
+  // Función para obtener todas las reservas que deben aparecer en el Select
+  const allReservationsForSelect = useMemo(() => {
+    console.log("🔄 Recalculando reservas para mostrar. showAllReservations:", showAllReservations)
     
-    if (selectedReservation) {
-      const amounts = calculateReservationAmounts(selectedReservation)
-      // Calcular pagos parciales completados existentes para esta reserva
-      const completedForReservation = payments
-        .filter((p) => p.reservation_id === reservationId && p.status === 'completed')
-      const totalCompletedPaid = completedForReservation
-        .reduce((sum, p) => sum + (p.amount || 0), 0)
-      const defaultAmount = Math.max(0, amounts.finalAmount - totalCompletedPaid)
-      setFormData({
-        ...formData,
-        reservation_id: reservationId,
-        customer_name: selectedReservation.guest?.name || "",
-        // Para nuevo pago, sugerir lo pendiente; si estamos editando, mantener importe
-        amount: payment ? formData.amount : defaultAmount
-      })
+    if (showAllReservations) {
+      // Si el checkbox está marcado, mostrar todas las reservas de la propiedad
+      const allReservations = reservations.filter(reservation => reservation.property_id === propertyId)
+      console.log("📋 Mostrando todas las reservas:", allReservations.length)
+      return allReservations
     } else {
-      setFormData({
-        ...formData,
+      // Mostrar solo reservas no pagadas + la reserva específica del pago que se está editando
+      const unpaidReservations = getUnpaidReservations()
+      
+      
+      // Si estamos editando un pago y tiene una reserva asociada
+      if (payment?.reservation_id) {
+        const associatedReservation = reservations.find(r => r.id === payment.reservation_id)
+        
+        // Si la reserva asociada no está en la lista de no pagadas, agregarla
+        if (associatedReservation && !unpaidReservations.find(r => r.id === associatedReservation.id)) {
+          console.log("➕ Agregando reserva asociada al pago:", associatedReservation.guest?.name)
+          return [associatedReservation, ...unpaidReservations]
+        }
+      }
+      
+      console.log("📋 Retornando solo reservas no pagadas")
+      return unpaidReservations
+    }
+  }, [showAllReservations, payment?.reservation_id, reservations, propertyId])
+
+  // Función para manejar cambios en el formulario
+  const handleInputChange = (field: string, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: String(value) // Convertir a string para mantener consistencia
+    }))
+  }
+
+  // Función para manejar la selección de reserva
+  const handleReservationChange = (reservationId: string) => {
+    const reservation = reservations.find(r => r.id === reservationId)
+    if (reservation) {
+      setFormData(prev => ({
+        ...prev,
         reservation_id: reservationId,
-        customer_name: "",
-        amount: formData.amount || 0
-      })
+        customer_name: reservation.guest?.name || ""
+      }))
     }
   }
 
+  // Cargar datos del pago si estamos editando
   useEffect(() => {
-    console.log("🔄 useEffect triggered with payment:", payment)
-    
     if (payment) {
-      // Si hay un pago, cargar sus datos para edición
       console.log("📝 Loading payment data for editing:", payment)
       setFormData({
-        customer_name: payment.customer_name,
-        amount: payment.amount || 0,
+        reservation_id: payment.reservation_id || "",
+        customer_name: payment.customer_name || "",
+        amount: String(payment.amount || ""),
         method: payment.method,
         status: payment.status,
         date: payment.date.split('T')[0],
         reference: payment.reference || "",
         notes: payment.notes || "",
-        fee: payment.fee || 0,
-        reservation_id: payment.reservation_id || "no_reservation",
+        fee: String(payment.fee || "0"),
       })
+      
+      // Si estamos editando un pago, verificar si la reserva asociada está en la lista de pendientes
+      // Si no está, marcar automáticamente el checkbox para mostrar todas las reservas
+      if (payment.reservation_id) {
+        const unpaidReservations = getUnpaidReservations()
+        const associatedReservation = unpaidReservations.find(r => r.id === payment.reservation_id)
+        if (!associatedReservation) {
+          setShowAllReservations(true)
+        }
+      }
     } else {
-      // Si no hay pago, limpiar el formulario para nuevo pago
       clearForm()
     }
   }, [payment])
@@ -699,53 +786,30 @@ function PaymentDialog({
     e.preventDefault()
 
     try {
+      // Verificar que el usuario tenga tenant_id
+      if (!user?.tenant_id) {
+        console.error("❌ Usuario sin tenant_id, no se puede crear/editar el pago")
+        alert("Error: No se pudo identificar tu organización. Por favor, contacta al administrador.")
+        return
+      }
+
       // Validación del importe del pago
-      if (formData.reservation_id && formData.reservation_id !== "no_reservation" && formData.amount > 0) {
+      if (formData.reservation_id && formData.reservation_id !== "no_reservation") {
         const selectedReservation = reservations.find(r => r.id === formData.reservation_id)
         if (selectedReservation) {
-          // Calcular el importe requerido para esta reserva
+          const { totalPaid, totalAmount, percentage } = getReservationPaymentProgress(formData.reservation_id)
+          const newPaymentAmount = parseFloat(formData.amount)
+          const newTotalPayments = totalPaid + newPaymentAmount
           const requiredAmount = calculateRequiredAmount(selectedReservation)
-          
-          // Obtener los pagos existentes para esta reserva (excluyendo el pago actual si estamos editando)
-          const { data: existingPayments } = await supabase
-            .from("payments")
-            .select("id, amount")
-            .eq("reservation_id", formData.reservation_id)
-            .eq("status", "completed")
-          
-          let totalExistingPayments = 0
-          if (existingPayments) {
-            totalExistingPayments = existingPayments.reduce((sum, p) => {
-              // Si estamos editando, excluir el importe del pago actual
-              if (payment && p.id === payment.id) {
-                return sum
-              }
-              return sum + (p.amount || 0)
-            }, 0)
-          }
-          
-          const pendingAmount = Math.max(0, requiredAmount - totalExistingPayments)
-          const newTotalPayments = totalExistingPayments + formData.amount
-          
-          // Debug logging
-          console.log('Payment validation:', {
-            reservationId: formData.reservation_id,
-            requiredAmount,
-            totalExistingPayments,
-            newPaymentAmount: formData.amount,
-            newTotalPayments,
-            pendingAmount,
-            isEditing: !!payment
-          })
-          
+
           // Validar que no se exceda el importe requerido
           if (newTotalPayments > requiredAmount) {
             const excessAmount = newTotalPayments - requiredAmount
             const warningMessage = `⚠️ Advertencia: El importe del pago excede el importe requerido.
 
 Importe requerido: €${requiredAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Pagos realizados: €${totalExistingPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Importe pendiente: €${pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Pagos realizados: €${totalPaid.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Importe pendiente: €${(requiredAmount - totalPaid).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 ¿Desea continuar con el pago de todas formas?`
@@ -761,6 +825,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
       const paymentData = {
         ...formData,
         reservation_id: formData.reservation_id === "no_reservation" ? null : formData.reservation_id,
+        tenant_id: user.tenant_id, // Agregar tenant_id del usuario autenticado
       }
 
       if (payment) {
@@ -768,6 +833,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           .from("payments")
           .update(paymentData)
           .eq("id", payment.id)
+          .eq("tenant_id", user.tenant_id) // Verificar que pertenece al tenant del usuario
 
         if (error) throw error
         // Actualizar estado de la reserva
@@ -786,6 +852,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
       onClose()
     } catch (error) {
       console.error("Error saving payment:", error)
+      alert("Error al guardar el pago. Por favor, intenta nuevamente.")
     }
   }
 
@@ -810,6 +877,20 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
       </DialogHeader>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Checkbox para mostrar todas las reservas */}
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="showAllReservations"
+            checked={showAllReservations}
+            onChange={(e) => handleCheckboxChange(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <Label htmlFor="showAllReservations" className="text-sm font-medium text-gray-700">
+            Mostrar todas las reservas
+          </Label>
+        </div>
+
         {/* Reserva como primer campo */}
         <div className="space-y-2">
           <Label htmlFor="reservation_id">Reserva *</Label>
@@ -819,16 +900,24 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
             required
           >
             <SelectTrigger>
-              <SelectValue placeholder="Selecciona una reserva" />
+              <SelectValue placeholder="Seleccionar reserva" />
             </SelectTrigger>
             <SelectContent>
-              {getUnpaidReservations().map((reservation) => (
+              <SelectItem value="no_reservation">
+                Sin reserva específica
+              </SelectItem>
+              {allReservationsForSelect.map((reservation) => (
                 <SelectItem key={reservation.id} value={reservation.id}>
-                  {reservation.guest?.name || "Sin nombre"} - {reservation.check_in} a {reservation.check_out} (€{reservation.total_amount})
+                  {reservation.guest?.name || "Sin nombre"} - {reservation.check_in} a {reservation.check_out}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {!showAllReservations && (
+            <p className="text-xs text-gray-500">
+              Mostrando solo reservas pendientes de pago. Marca el checkbox para ver todas las reservas.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -901,8 +990,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                   value={formData.amount}
                   onChange={(e) => {
                     const value = e.target.value
-                    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
-                    setFormData({ ...formData, amount: numValue })
+                    setFormData({ ...formData, amount: value })
                   }}
                   className="bg-white font-semibold"
                   required
@@ -927,8 +1015,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               value={formData.amount || ""}
               onChange={(e) => {
                 const value = e.target.value
-                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
-                setFormData({ ...formData, amount: numValue })
+                setFormData({ ...formData, amount: value })
               }}
               required
               className="font-semibold"
@@ -996,8 +1083,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               value={formData.fee || ""}
               onChange={(e) => {
                 const value = e.target.value
-                const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
-                setFormData({ ...formData, fee: numValue })
+                setFormData({ ...formData, fee: value })
               }}
             />
           </div>

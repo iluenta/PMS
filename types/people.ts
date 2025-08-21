@@ -16,6 +16,7 @@ export interface Person {
   state?: string
   postal_code?: string
   notes?: string
+  tenant_id: number
   created_at: string
   updated_at: string
 }
@@ -39,6 +40,7 @@ export interface CreatePersonInput {
   state?: string
   postal_code?: string
   notes?: string
+  tenant_id?: number
 }
 
 export interface UpdatePersonInput extends Partial<CreatePersonInput> {}

@@ -95,7 +95,7 @@ export function AuthProvider({ children, onTenantChange }: { children: React.Rea
     return () => {
       subscription.unsubscribe()
     }
-  }, [onTenantChange])
+  }, []) // Removed onTenantChange dependency to prevent infinite loop
 
   const signIn = async (email: string, password: string) => {
     try {

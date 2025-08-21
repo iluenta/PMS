@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { CreatePersonInput, Person, PersonType, UpdatePersonInput } from '@/types/people'
 import { createPerson, updatePerson } from '@/lib/peopleService'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface Props {
   person?: Person | null
@@ -16,6 +17,8 @@ interface Props {
 }
 
 export default function PersonForm({ person, onClose, onSaved }: Props) {
+  const { user } = useAuth()
+  
   const normalizeType = (t: string | undefined): PersonType => {
     const v = (t || '').toLowerCase()
     if (v === 'guest' || v === 'provider' || v === 'distribution_channel' || v === 'other') return v as PersonType
@@ -58,7 +61,11 @@ export default function PersonForm({ person, onClose, onSaved }: Props) {
       if (isEditing && person) {
         await updatePerson(person.id, formData)
       } else {
-        await createPerson(formData)
+        // Agregar tenant_id al crear una nueva persona
+        await createPerson({
+          ...formData,
+          tenant_id: user?.tenant_id
+        })
       }
       onSaved()
       onClose()

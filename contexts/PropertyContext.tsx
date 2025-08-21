@@ -110,7 +110,7 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
 
   // Restaurar propiedad seleccionada desde localStorage
   useEffect(() => {
-    if (properties.length > 0) {
+    if (properties.length > 0 && !selectedProperty) {
       const savedPropertyId = localStorage.getItem("selectedPropertyId")
       
       if (savedPropertyId) {
@@ -122,14 +122,12 @@ export function PropertyProvider({ children }: PropertyProviderProps) {
       }
       
       // Si no hay propiedad guardada o no se encuentra, seleccionar la primera
-      if (!selectedProperty) {
-        setSelectedProperty(properties[0])
-        if (properties[0]) {
-          localStorage.setItem("selectedPropertyId", properties[0].id)
-        }
+      setSelectedProperty(properties[0])
+      if (properties[0]) {
+        localStorage.setItem("selectedPropertyId", properties[0].id)
       }
     }
-  }, [properties])
+  }, [properties, selectedProperty]) // Added selectedProperty to prevent unnecessary updates
 
   // Guardar propiedad seleccionada en localStorage cuando cambie
   useEffect(() => {

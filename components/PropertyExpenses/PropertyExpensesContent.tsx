@@ -6,7 +6,7 @@ import { Plus, Receipt } from "lucide-react"
 import { usePropertyExpenses } from "./usePropertyExpenses"
 import PropertyExpensesSummary from "./PropertyExpensesSummary"
 import PropertyExpensesFilters from "./PropertyExpensesFilters"
-import PropertyExpensesTable from "./PropertyExpensesTable"
+import PropertyExpensesCards from "./PropertyExpensesCards"
 import PropertyExpensesForm from "./PropertyExpensesForm"
 import { CreateRecurrenceModal } from "./CreateRecurrenceModal"
 import type { Expense } from "@/lib/supabase"
@@ -156,7 +156,7 @@ export function PropertyExpensesContent() {
         </CardContent>
       </Card>
 
-      {/* Tabla de gastos */}
+      {/* Lista de gastos en tarjetas */}
       <Card>
         <CardHeader>
           <CardTitle>Lista de Gastos</CardTitle>
@@ -165,7 +165,7 @@ export function PropertyExpensesContent() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <PropertyExpensesTable
+          <PropertyExpensesCards
             expenses={expenses}
             loading={loading}
             onEdit={handleEditExpense}

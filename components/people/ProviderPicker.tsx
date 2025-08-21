@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { searchPeople, createPerson } from '@/lib/peopleService'
 import type { Person } from '@/types/people'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface Props {
   value: { name: string; email?: string; phone?: string; personId?: string }
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function ProviderPicker({ value, onChange }: Props) {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
@@ -39,7 +41,8 @@ export function ProviderPicker({ value, onChange }: Props) {
         email: '',
         phone: '',
         country: '',
-        person_type: 'provider'
+        person_type: 'provider',
+        tenant_id: user?.tenant_id
       })
       
       // Actualizar el valor con el nuevo proveedor creado

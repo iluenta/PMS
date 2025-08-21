@@ -38,8 +38,7 @@ export function usePropertyExpensesData() {
 
     try {
       setLoading(true)
-      console.log('Fetching expenses for property:', selectedProperty.id)
-      console.log('Selected property:', selectedProperty)
+      
 
       // Primero probar query simple sin joins para diagnosticar
       console.log('Trying simple query first...')
@@ -49,7 +48,7 @@ export function usePropertyExpensesData() {
         .eq('property_id', selectedProperty.id)
         .order('date', { ascending: false })
 
-      console.log('Raw expenses query result:', { data: expensesData, error: expensesError })
+      
 
       if (expensesError) {
         console.error('Error fetching expenses:')
@@ -61,7 +60,7 @@ export function usePropertyExpensesData() {
         throw expensesError
       }
 
-      console.log('Expenses data:', expensesData)
+      
       setExpenses(expensesData || [])
 
       // Fetch reservations

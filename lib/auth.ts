@@ -1,4 +1,5 @@
-import { supabase } from "./supabase"
+import { createClient } from '@supabase/supabase-js'
+import { supabase as supabaseClient, getSupabase } from './supabase'
 import type { User } from "./supabase"
 
 export interface AuthUser {
@@ -28,7 +29,7 @@ export interface AuthError {
 export async function signInWithPassword(credentials: LoginCredentials): Promise<AuthUser> {
   try {
     // First, authenticate with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
       email: credentials.email,
       password: credentials.password,
     })
@@ -42,7 +43,7 @@ export async function signInWithPassword(credentials: LoginCredentials): Promise
     }
 
     // Then, get user data from the users table
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await supabaseClient
       .from("users")
       .select("*")
       .eq("id", authData.user.id)
@@ -61,7 +62,7 @@ export async function signInWithPassword(credentials: LoginCredentials): Promise
     }
 
     // Update last_login timestamp
-    await supabase
+    await supabaseClient
       .from("users")
       .update({ last_login: new Date().toISOString() })
       .eq("id", userData.id)
@@ -86,51 +87,65 @@ export async function signInWithPassword(credentials: LoginCredentials): Promise
  * @param userId The ID of the user to fetch.
  * @param retryCount Current retry attempt (internal use)
  */
+// Cache para evitar consultas repetidas
+const userProfileCache = new Map<string, { user: AuthUser; timestamp: number }>()
+const CACHE_DURATION = 15 * 60 * 1000 // 15 minutos (aumentado de 10 a 15)
+
+// Fallback data para casos de emergencia
+const fallbackUserProfile: AuthUser = {
+  id: '',
+  email: '',
+  full_name: 'Usuario',
+  role: 'viewer', // Cambiar de 'user' a 'viewer' que es un tipo válido
+  is_active: true,
+  last_login: undefined, // Cambiar de null a undefined para coincidir con el tipo opcional
+  tenant_id: 0, // Cambiar de undefined a 0 para coincidir con el tipo number
+}
+
 export async function getUserProfile(userId: string, retryCount = 0): Promise<AuthUser | null> {
-  const maxRetries = 1 // Reduce retries but increase timeouts
-  const timeoutDuration = 15000 // Reduce to 15 seconds
+  const maxRetries = 2 // Reducir de 3 a 2
+  const timeoutDuration = 10000 // Reducir de 30s a 10s
 
   try {
-    console.log(`getUserProfile: Starting attempt ${retryCount + 1} for userId:`, userId)
+    // Verificar cache primero - ser más agresivo con el caché
+    const cached = userProfileCache.get(userId)
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.user
+    }
     
+    // Si hay caché expirado, usarlo como fallback mientras se hace la consulta
+    const expiredCache = cached ? cached.user : null
     
-
-    console.log(`getUserProfile: Querying users table (timeout: ${timeoutDuration}ms)...`)
+    // Usar la nueva función getSupabase() que maneja la salud de la conexión
+    const supabase = await getSupabase()
     
-    // Add timeout to prevent infinite hanging
+    const startTime = Date.now()
+    
+    // Crear un timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error(`getUserProfile timeout (${timeoutDuration}ms)`)), timeoutDuration)
     })
-
+    
+    // Consulta optimizada - solo campos necesarios
     const queryPromise = supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
+      .from('users')
+      .select('id, email, full_name, role, is_active, last_login, tenant_id')
+      .eq('id', userId)
       .single()
-
+    
+    // Ejecutar consulta con timeout
     const { data: userData, error } = await Promise.race([queryPromise, timeoutPromise])
-
-    console.log("getUserProfile: Query completed", { userData: userData ? "found" : "null", error: error?.message })
-
-    if (error || !userData) {
-      // If this is a network/timeout error and we haven't exhausted retries, try again
-      if (retryCount < maxRetries && (error?.message?.includes('timeout') || error?.message?.includes('network') || !error)) {
-        console.log(`getUserProfile: Retrying due to error (attempt ${retryCount + 1}/${maxRetries + 1})`)
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))) // Progressive delay
-        return getUserProfile(userId, retryCount + 1)
-      }
-      
-      console.error("Error fetching user profile:", error?.message)
+    
+    if (error) {
+      throw error
+    }
+    
+    if (!userData) {
       return null
     }
-
-    if (!userData.is_active) {
-      console.warn(`User account ${userId} is deactivated.`)
-      return null
-    }
-
-    console.log("getUserProfile: Returning user profile for", userData.email)
-    return {
+    
+    // Mapear datos a AuthUser
+    const user: AuthUser = {
       id: userData.id,
       email: userData.email,
       full_name: userData.full_name,
@@ -139,16 +154,39 @@ export async function getUserProfile(userId: string, retryCount = 0): Promise<Au
       last_login: userData.last_login,
       tenant_id: userData.tenant_id,
     }
+    
+    // Cachear el resultado exitoso
+    userProfileCache.set(userId, { user, timestamp: Date.now() })
+    
+    return user
+    
   } catch (error) {
-    // If this is a network/timeout error and we haven't exhausted retries, try again
-    if (retryCount < maxRetries && (error instanceof Error && (error.message?.includes('timeout') || error.message?.includes('network')))) {
-      console.log(`getUserProfile: Retrying due to error (attempt ${retryCount + 1}/${maxRetries + 1}):`, error.message)
-      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))) // Progressive delay
+    // Si es un error de timeout y tenemos caché expirado, usarlo como fallback
+    if (error instanceof Error && error.message.includes('timeout')) {
+      const cached = userProfileCache.get(userId)
+      if (cached) {
+        return cached.user
+      }
+    }
+    
+    // Retry logic más inteligente
+    if (retryCount < maxRetries) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 5000) // Exponential backoff: 1s, 2s, 4s, max 5s
+      
+      await new Promise(resolve => setTimeout(resolve, delay))
       return getUserProfile(userId, retryCount + 1)
     }
     
-    console.error("Error in getUserProfile:", error)
-    return null
+    // Si todos los reintentos fallaron, usar fallback
+    
+    // Usar caché expirado si está disponible
+    const cached = userProfileCache.get(userId)
+    if (cached) {
+      return cached.user
+    }
+    
+    // Fallback genérico como último recurso
+    return fallbackUserProfile
   }
 }
 
@@ -157,7 +195,7 @@ export async function getUserProfile(userId: string, retryCount = 0): Promise<Au
  */
 export async function signOut(): Promise<void> {
   try {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabaseClient.auth.signOut()
     if (error) {
       throw error
     }
@@ -172,23 +210,18 @@ export async function signOut(): Promise<void> {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    console.log("getCurrentUser: Starting...")
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession()
 
     if (sessionError) {
-      console.error("getCurrentUser: Supabase error getting session:", sessionError.message)
       return null
     }
 
     if (!session) {
-      console.log("getCurrentUser: No active session found.")
       return null
     }
 
-    console.log("getCurrentUser: Session found, fetching user profile for", session.user.id)
     return getUserProfile(session.user.id)
   } catch (error) {
-    console.error("getCurrentUser: Unexpected error:", error)
     return null
   }
 }
@@ -216,7 +249,7 @@ export function hasRole(user: AuthUser | null, requiredRole: AuthUser["role"]): 
  */
 export async function getSession() {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession()
+    const { data: { session }, error } = await supabaseClient.auth.getSession()
     
     if (error) {
       throw error

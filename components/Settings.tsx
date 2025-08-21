@@ -38,8 +38,10 @@ import type {
   CreateExpenseSubcategoryData
 } from "@/types/expenses"
 import { Plus, Edit, Globe, Trash2, Settings as SettingsIcon, Users, Shield, Database, Upload, X, FolderOpen, FolderTree } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function Settings() {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("general")
   const [channels, setChannels] = useState<DistributionChannel[]>([])
   const [loading, setLoading] = useState(true)
@@ -182,7 +184,11 @@ export default function Settings() {
         if (!personId && formData.name.trim()) {
           try {
             const peopleApi = await import('@/lib/peopleService')
-            const createdPerson = await peopleApi.createPerson({ person_type: 'distribution_channel', company_name: formData.name } as any)
+            const createdPerson = await peopleApi.createPerson({ 
+              person_type: 'distribution_channel', 
+              company_name: formData.name,
+              tenant_id: user?.tenant_id
+            } as any)
             personId = createdPerson.id
           } catch (e) {
             // Continuar sin bloquear si falla la creación; FK podría permitir null en tu esquema actual

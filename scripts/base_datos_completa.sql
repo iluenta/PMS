@@ -50,8 +50,8 @@ CREATE TABLE public.documents (
   uploaded_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT documents_pkey PRIMARY KEY (id),
-  CONSTRAINT documents_expense_id_fkey FOREIGN KEY (expense_id) REFERENCES public.expenses(id),
-  CONSTRAINT documents_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES auth.users(id)
+  CONSTRAINT documents_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES auth.users(id),
+  CONSTRAINT documents_expense_id_fkey FOREIGN KEY (expense_id) REFERENCES public.expenses(id)
 );
 CREATE TABLE public.expense_categories (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -90,8 +90,8 @@ CREATE TABLE public.expenses (
   subcategory_id uuid,
   vendor_id uuid,
   CONSTRAINT expenses_pkey PRIMARY KEY (id),
-  CONSTRAINT expenses_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.expense_subcategories(id),
   CONSTRAINT expenses_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.people(id),
+  CONSTRAINT expenses_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.expense_subcategories(id),
   CONSTRAINT expenses_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.expense_categories(id)
 );
 CREATE TABLE public.guide_categories (
@@ -233,7 +233,9 @@ CREATE TABLE public.properties (
   updated_at timestamp with time zone DEFAULT now(),
   channel_ratings jsonb DEFAULT '{}'::jsonb,
   channel_configuration jsonb DEFAULT '{}'::jsonb,
-  CONSTRAINT properties_pkey PRIMARY KEY (id)
+  tenant_id integer,
+  CONSTRAINT properties_pkey PRIMARY KEY (id),
+  CONSTRAINT properties_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
 CREATE TABLE public.property_channels (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -258,8 +260,8 @@ CREATE TABLE public.property_channels (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT property_channels_pkey PRIMARY KEY (id),
-  CONSTRAINT property_channels_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.distribution_channels(id),
-  CONSTRAINT property_channels_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id)
+  CONSTRAINT property_channels_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id),
+  CONSTRAINT property_channels_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.distribution_channels(id)
 );
 CREATE TABLE public.property_settings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -303,9 +305,16 @@ CREATE TABLE public.reservations (
   property_channel_id uuid NOT NULL,
   person_id uuid,
   CONSTRAINT reservations_pkey PRIMARY KEY (id),
-  CONSTRAINT reservations_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.people(id),
   CONSTRAINT reservations_new_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id),
-  CONSTRAINT reservations_property_channel_fkey FOREIGN KEY (property_channel_id) REFERENCES public.property_channels(id)
+  CONSTRAINT reservations_property_channel_fkey FOREIGN KEY (property_channel_id) REFERENCES public.property_channels(id),
+  CONSTRAINT reservations_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.people(id)
+);
+CREATE TABLE public.tenants (
+  id integer NOT NULL DEFAULT nextval('tenants_id_seq'::regclass),
+  name text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT tenants_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.users (
   id uuid NOT NULL,
@@ -316,6 +325,8 @@ CREATE TABLE public.users (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   last_login timestamp with time zone,
+  tenant_id integer,
   CONSTRAINT users_pkey PRIMARY KEY (id),
-  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+  CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
