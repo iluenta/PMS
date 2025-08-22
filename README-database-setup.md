@@ -4,9 +4,20 @@
 
 Antes de usar la funcionalidad de configuraciones del sistema, **DEBES ejecutar los scripts SQL** para crear la tabla y habilitar las políticas de seguridad.
 
+## ⚠️ PROBLEMA CONOCIDO: Error de Permisos
+
+Si encuentras este error:
+```
+permission denied for table users
+```
+
+**Causa**: Las políticas RLS complejas intentan acceder a `auth.users` o `public.users` para obtener el `tenant_id`, pero no tienen permisos.
+
+**Solución**: Usar el script simplificado `scripts/62-simple-settings-rls.sql` que evita este problema.
+
 ## 📋 Scripts Disponibles
 
-### 1. Script Completo (Recomendado)
+### 1. Script Completo (Recomendado para desarrollo)
 **Archivo:** `scripts/60-complete-settings-setup.sql`
 
 Este script hace todo en una sola ejecución:
@@ -17,11 +28,21 @@ Este script hace todo en una sola ejecución:
 - ✅ Crea todas las políticas de seguridad
 - ✅ Incluye verificaciones automáticas
 
-### 2. Scripts Separados
+### 2. Script RLS Simplificado (Recomendado para producción)
+**Archivo:** `scripts/62-simple-settings-rls.sql`
+
+Este script evita problemas de permisos:
+- ✅ Usa políticas RLS básicas y seguras
+- ✅ No depende de tablas externas como `users`
+- ✅ Funciona inmediatamente sin configuración adicional
+- ✅ Ideal para entornos donde no hay tabla `users` con `tenant_id`
+
+### 3. Scripts Separados
 Si prefieres ejecutar paso a paso:
 
 - **`scripts/58-create-settings-table.sql`**: Solo crea la tabla y datos
-- **`scripts/59-enable-settings-rls.sql`**: Solo habilita RLS y políticas
+- **`scripts/59-enable-settings-rls.sql`**: Solo habilita RLS y políticas (puede tener problemas de permisos)
+- **`scripts/61-fix-settings-rls-policies.sql`**: Corrige políticas existentes (experimental)
 
 ## 🗄️ Estructura de la Tabla
 
@@ -40,37 +61,35 @@ CREATE TABLE public.settings (
 
 ## 🔐 Políticas de Seguridad (RLS)
 
-### Políticas Implementadas:
+### Políticas Simplificadas (Recomendadas):
+1. **SELECT**: Usuarios autenticados pueden ver todas las configuraciones
+2. **INSERT**: Usuarios autenticados pueden crear configuraciones
+3. **UPDATE**: Usuarios autenticados pueden actualizar configuraciones
+4. **DELETE**: Usuarios autenticados pueden eliminar configuraciones
+
+### Políticas Avanzadas (Requieren tabla users con tenant_id):
 1. **SELECT**: Usuarios pueden ver configuraciones globales y de su tenant
 2. **INSERT**: Usuarios pueden crear configuraciones para su tenant o globales
 3. **UPDATE**: Usuarios solo pueden actualizar configuraciones de su tenant
 4. **DELETE**: Usuarios solo pueden eliminar configuraciones de su tenant
 
-### Seguridad por Tenant:
-- Cada usuario solo ve configuraciones de su organización
-- Las configuraciones globales (`tenant_id = NULL`) son visibles para todos
-- No hay acceso cruzado entre tenants
-
 ## 🚀 Cómo Ejecutar
 
-### Opción 1: Script Completo (Recomendado)
+### Opción 1: Script Simplificado (Recomendado para evitar problemas)
+```sql
+-- En tu cliente SQL (pgAdmin, DBeaver, etc.)
+-- Ejecutar el contenido de: scripts/62-simple-settings-rls.sql
+```
+
+### Opción 2: Script Completo (Para desarrollo)
 ```sql
 -- En tu cliente SQL (pgAdmin, DBeaver, etc.)
 -- Ejecutar el contenido de: scripts/60-complete-settings-setup.sql
 ```
 
-### Opción 2: Desde la Línea de Comandos
-```bash
-# Conectarse a tu base de datos Supabase
-psql "postgresql://postgres:[password]@[host]:5432/postgres"
-
-# Ejecutar el script
-\i scripts/60-complete-settings-setup.sql
-```
-
 ### Opción 3: Desde Supabase Dashboard
 1. Ir a **SQL Editor** en tu proyecto Supabase
-2. Copiar y pegar el contenido del script
+2. Copiar y pegar el contenido del script elegido
 3. Ejecutar la consulta
 
 ## ✅ Verificaciones Post-Ejecución
@@ -128,6 +147,10 @@ WHERE key = 'nueva_config';
 - **Causa**: No se ejecutó el script SQL
 - **Solución**: Ejecutar `scripts/60-complete-settings-setup.sql`
 
+### Error: "permission denied for table users"
+- **Causa**: Las políticas RLS intentan acceder a tablas sin permisos
+- **Solución**: Usar `scripts/62-simple-settings-rls.sql` en su lugar
+
 ### Error: "Permission denied"
 - **Causa**: RLS no está habilitado o las políticas no están creadas
 - **Solución**: Verificar que RLS esté habilitado y las políticas existan
@@ -144,11 +167,13 @@ Si encuentras problemas:
 2. **Verificar base de datos**: Confirmar que la tabla `settings` existe
 3. **Verificar RLS**: Confirmar que las políticas están activas
 4. **Revisar permisos**: Verificar que el usuario tiene acceso a la tabla
+5. **Usar script simplificado**: Si hay problemas de permisos, usar `62-simple-settings-rls.sql`
 
 ## 🎉 ¡Listo!
 
 Una vez ejecutado el script SQL, la funcionalidad de configuraciones estará completamente operativa con:
-- ✅ Seguridad por tenant
-- ✅ Políticas RLS activas
+- ✅ Seguridad básica por RLS
+- ✅ Políticas RLS activas y funcionales
 - ✅ Datos de ejemplo cargados
 - ✅ Interfaz de usuario funcional
+- ✅ Sin problemas de permisos
