@@ -322,3 +322,139 @@ export function getColoredListValue(setting: Setting): Array<{ name: string; col
   }
   return []
 }
+
+/**
+ * Obtiene los estados de reserva desde la configuración
+ */
+export async function getReservationStatuses(): Promise<Array<{ name: string; color: string }>> {
+  try {
+    const setting = await getSettingByKey('reservation_statuses')
+    if (!setting) {
+      console.warn('⚠️ Configuración "reservation_statuses" no encontrada. Usando valores por defecto.')
+      // Valores por defecto si no existe la configuración
+      return [
+        { name: 'Pendiente', color: '#fbbf24' },
+        { name: 'Confirmada', color: '#34d399' },
+        { name: 'Cancelada', color: '#f87171' },
+        { name: 'Completada', color: '#60a5fa' }
+      ]
+    }
+    
+    if (setting.config_type !== 'colored_list') {
+      throw new Error('La configuración reservation_statuses debe ser de tipo colored_list')
+    }
+    
+    return getColoredListValue(setting)
+  } catch (error) {
+    console.error('💥 Error obteniendo estados de reserva:', error)
+    // Retornar valores por defecto en caso de error
+    return [
+      { name: 'Pendiente', color: '#fbbf24' },
+      { name: 'Confirmada', color: '#34d399' },
+      { name: 'Cancelada', color: '#f87171' },
+      { name: 'Completada', color: '#60a5fa' }
+    ]
+  }
+}
+
+/**
+ * Obtiene los tipos de propiedad desde la configuración
+ */
+export async function getPropertyTypes(): Promise<string[]> {
+  try {
+    const setting = await getSettingByKey('property_types')
+    if (!setting) {
+      console.warn('⚠️ Configuración "property_types" no encontrada. Usando valores por defecto.')
+      return ['Apartamento', 'Casa', 'Villa', 'Cabaña', 'Loft', 'Estudio']
+    }
+    
+    if (setting.config_type !== 'simple_list') {
+      throw new Error('La configuración property_types debe ser de tipo simple_list')
+    }
+    
+    return getSimpleListValue(setting)
+  } catch (error) {
+    console.error('💥 Error obteniendo tipos de propiedad:', error)
+    return ['Apartamento', 'Casa', 'Villa', 'Cabaña', 'Loft', 'Estudio']
+  }
+}
+
+/**
+ * Obtiene los servicios incluidos desde la configuración
+ */
+export async function getIncludedServices(): Promise<string[]> {
+  try {
+    const setting = await getSettingByKey('included_services')
+    if (!setting) {
+      console.warn('⚠️ Configuración "included_services" no encontrada. Usando valores por defecto.')
+      return ['WiFi', 'Limpieza', 'Toallas', 'Sábanas', 'Cocina equipada', 'Estacionamiento']
+    }
+    
+    if (setting.config_type !== 'simple_list') {
+      throw new Error('La configuración included_services debe ser de tipo simple_list')
+    }
+    
+    return getSimpleListValue(setting)
+  } catch (error) {
+    console.error('💥 Error obteniendo servicios incluidos:', error)
+    return ['WiFi', 'Limpieza', 'Toallas', 'Sábanas', 'Cocina equipada', 'Estacionamiento']
+  }
+}
+
+/**
+ * Obtiene los métodos de pago desde la configuración
+ */
+export async function getPaymentMethods(): Promise<Array<{ name: string; color: string }>> {
+  try {
+    const setting = await getSettingByKey('payment_methods')
+    if (!setting) {
+      console.warn('⚠️ Configuración "payment_methods" no encontrada. Usando valores por defecto.')
+      return [
+        { name: 'Tarjeta de Crédito', color: '#10b981' },
+        { name: 'Transferencia', color: '#3b82f6' },
+        { name: 'Efectivo', color: '#f59e0b' },
+        { name: 'PayPal', color: '#8b5cf6' }
+      ]
+    }
+    
+    if (setting.config_type !== 'colored_list') {
+      throw new Error('La configuración payment_methods debe ser de tipo colored_list')
+    }
+    
+    return getColoredListValue(setting)
+  } catch (error) {
+    console.error('💥 Error obteniendo métodos de pago:', error)
+    return [
+      { name: 'Tarjeta de Crédito', color: '#10b981' },
+      { name: 'Transferencia', color: '#3b82f6' },
+      { name: 'Efectivo', color: '#f59e0b' },
+      { name: 'PayPal', color: '#8b5cf6' }
+    ]
+  }
+}
+
+/**
+ * Obtiene un estado de reserva específico por nombre
+ */
+export async function getReservationStatusByName(statusName: string): Promise<{ name: string; color: string } | null> {
+  try {
+    const statuses = await getReservationStatuses()
+    return statuses.find(status => status.name === statusName) || null
+  } catch (error) {
+    console.error('💥 Error obteniendo estado de reserva por nombre:', error)
+    return null
+  }
+}
+
+/**
+ * Verifica si un estado de reserva existe
+ */
+export async function isValidReservationStatus(statusName: string): Promise<boolean> {
+  try {
+    const statuses = await getReservationStatuses()
+    return statuses.some(status => status.name === statusName)
+  } catch (error) {
+    console.error('💥 Error verificando estado de reserva válido:', error)
+    return false
+  }
+}
