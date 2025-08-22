@@ -14,19 +14,45 @@ import type {
  */
 export async function getSettings(): Promise<Setting[]> {
   try {
+    console.log('🔍 Attempting to fetch settings from Supabase...')
+    
     const { data, error } = await supabase
       .from('settings')
       .select('*')
       .order('key', { ascending: true })
 
     if (error) {
-      console.error('Error fetching settings:', error)
+      console.error('❌ Supabase error fetching settings:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
+      
+      // Si la tabla no existe, retornar array vacío en lugar de fallar
+      if (error.code === '42P01') { // undefined_table
+        console.warn('⚠️ Table "settings" does not exist yet. Please run the SQL scripts first.')
+        return []
+      }
+      
       throw error
     }
 
+    console.log('✅ Successfully fetched settings:', data?.length || 0, 'settings found')
     return data || []
   } catch (error) {
-    console.error('Error in getSettings:', error)
+    console.error('💥 Unexpected error in getSettings:', error)
+    
+    // Si es un error de red o conexión, retornar array vacío
+    if (error instanceof Error && (
+      error.message.includes('fetch') || 
+      error.message.includes('network') ||
+      error.message.includes('connection')
+    )) {
+      console.warn('⚠️ Network/connection error, returning empty array')
+      return []
+    }
+    
     throw error
   }
 }
@@ -36,6 +62,8 @@ export async function getSettings(): Promise<Setting[]> {
  */
 export async function getSettingByKey(key: string): Promise<Setting | null> {
   try {
+    console.log(`🔍 Attempting to fetch setting with key: ${key}`)
+    
     const { data, error } = await supabase
       .from('settings')
       .select('*')
@@ -45,15 +73,30 @@ export async function getSettingByKey(key: string): Promise<Setting | null> {
     if (error) {
       if (error.code === 'PGRST116') {
         // No se encontró la configuración
+        console.log(`ℹ️ No setting found with key: ${key}`)
         return null
       }
-      console.error('Error fetching setting by key:', error)
+      
+      console.error('❌ Supabase error fetching setting by key:', {
+        key,
+        message: error.message,
+        code: error.code,
+        details: error.details
+      })
+      
+      // Si la tabla no existe, retornar null
+      if (error.code === '42P01') { // undefined_table
+        console.warn('⚠️ Table "settings" does not exist yet. Please run the SQL scripts first.')
+        return null
+      }
+      
       throw error
     }
 
+    console.log(`✅ Successfully fetched setting: ${key}`)
     return data
   } catch (error) {
-    console.error('Error in getSettingByKey:', error)
+    console.error('💥 Unexpected error in getSettingByKey:', error)
     throw error
   }
 }
@@ -63,6 +106,8 @@ export async function getSettingByKey(key: string): Promise<Setting | null> {
  */
 export async function getSettingsByType(configType: ConfigType): Promise<Setting[]> {
   try {
+    console.log(`🔍 Attempting to fetch settings by type: ${configType}`)
+    
     const { data, error } = await supabase
       .from('settings')
       .select('*')
@@ -70,13 +115,26 @@ export async function getSettingsByType(configType: ConfigType): Promise<Setting
       .order('key', { ascending: true })
 
     if (error) {
-      console.error('Error fetching settings by type:', error)
+      console.error('❌ Supabase error fetching settings by type:', {
+        configType,
+        message: error.message,
+        code: error.code,
+        details: error.details
+      })
+      
+      // Si la tabla no existe, retornar array vacío
+      if (error.code === '42P01') { // undefined_table
+        console.warn('⚠️ Table "settings" does not exist yet. Please run the SQL scripts first.')
+        return []
+      }
+      
       throw error
     }
 
+    console.log(`✅ Successfully fetched ${data?.length || 0} settings of type: ${configType}`)
     return data || []
   } catch (error) {
-    console.error('Error in getSettingsByType:', error)
+    console.error('💥 Unexpected error in getSettingsByType:', error)
     throw error
   }
 }
