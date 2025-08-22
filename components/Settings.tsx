@@ -38,6 +38,7 @@ import type {
   CreateExpenseSubcategoryData
 } from "@/types/expenses"
 import { Plus, Edit, Globe, Trash2, Settings as SettingsIcon, Users, Shield, Database, Upload, X, FolderOpen, FolderTree } from "lucide-react"
+import SettingsConfigurations from "./SettingsConfigurations"
 import { useAuth } from "@/contexts/AuthContext"
 
 export default function Settings() {
@@ -403,8 +404,8 @@ export default function Settings() {
               <span>Categorías</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span>Usuarios</span>
+              <SettingsIcon className="h-4 w-4" />
+              <span>Configuraciones</span>
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center space-x-2">
               <Shield className="h-4 w-4" />
@@ -944,21 +945,9 @@ export default function Settings() {
             </Tabs>
           </TabsContent>
 
-          {/* Users Tab */}
+          {/* Users Tab - Now Configurations */}
           <TabsContent value="users" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gestión de Usuarios</CardTitle>
-                <CardDescription>
-                  Administra usuarios y permisos del sistema
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Funcionalidad en desarrollo
-                </p>
-              </CardContent>
-            </Card>
+            <SettingsConfigurations />
           </TabsContent>
 
           {/* Security Tab */}
