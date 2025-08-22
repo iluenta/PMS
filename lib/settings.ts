@@ -144,6 +144,14 @@ export async function getSettingsByType(configType: ConfigType): Promise<Setting
  */
 export async function createSetting(settingData: CreateSettingData): Promise<Setting> {
   try {
+    console.log('🔍 Attempting to create setting:', {
+      key: settingData.key,
+      description: settingData.description,
+      config_type: settingData.config_type,
+      value: settingData.value,
+      tenant_id: settingData.tenant_id
+    })
+    
     const { data, error } = await supabase
       .from('settings')
       .insert([settingData])
@@ -151,13 +159,32 @@ export async function createSetting(settingData: CreateSettingData): Promise<Set
       .single()
 
     if (error) {
-      console.error('Error creating setting:', error)
+      console.error('❌ Supabase error creating setting:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
+      
+      // Si la tabla no existe, mostrar mensaje específico
+      if (error.code === '42P01') { // undefined_table
+        console.warn('⚠️ Table "settings" does not exist yet. Please run the SQL scripts first.')
+        throw new Error('Table "settings" does not exist. Please run the SQL setup scripts first.')
+      }
+      
+      // Si hay problema de permisos
+      if (error.code === '42501') { // insufficient_privilege
+        console.warn('⚠️ Permission denied. RLS policies may not be configured correctly.')
+        throw new Error('Permission denied. Please check RLS policies configuration.')
+      }
+      
       throw error
     }
 
+    console.log('✅ Successfully created setting:', data)
     return data
   } catch (error) {
-    console.error('Error in createSetting:', error)
+    console.error('💥 Unexpected error in createSetting:', error)
     throw error
   }
 }

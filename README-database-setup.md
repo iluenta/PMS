@@ -13,36 +13,45 @@ permission denied for table users
 
 **Causa**: Las políticas RLS complejas intentan acceder a `auth.users` o `public.users` para obtener el `tenant_id`, pero no tienen permisos.
 
-**Solución**: Usar el script simplificado `scripts/62-simple-settings-rls.sql` que evita este problema.
+**Solución**: Usar el script simplificado `scripts/63-complete-simple-settings-setup.sql` que evita este problema.
+
+## ⚠️ PROBLEMA CONOCIDO: No se guardan nuevas claves
+
+Si las nuevas claves que añades no se están guardando:
+
+**Causa**: La tabla `settings` no existe o las políticas RLS no están configuradas correctamente.
+
+**Solución**: Ejecutar `scripts/63-complete-simple-settings-setup.sql` que crea todo desde cero.
 
 ## 📋 Scripts Disponibles
 
-### 1. Script Completo (Recomendado para desarrollo)
-**Archivo:** `scripts/60-complete-settings-setup.sql`
+### 1. Script Completo Simplificado (Recomendado para producción)
+**Archivo:** `scripts/63-complete-simple-settings-setup.sql`
 
-Este script hace todo en una sola ejecución:
-- ✅ Crea la tabla `settings`
+Este script hace todo en una sola ejecución y evita problemas:
+- ✅ Crea la tabla `settings` desde cero
 - ✅ Crea índices y triggers
 - ✅ Inserta datos de ejemplo
 - ✅ Habilita Row Level Security (RLS)
-- ✅ Crea todas las políticas de seguridad
+- ✅ Crea políticas RLS simplificadas y seguras
 - ✅ Incluye verificaciones automáticas
+- ✅ **NO tiene problemas de permisos**
 
-### 2. Script RLS Simplificado (Recomendado para producción)
-**Archivo:** `scripts/62-simple-settings-rls.sql`
+### 2. Script de Prueba
+**Archivo:** `scripts/64-test-settings-functionality.sql`
 
-Este script evita problemas de permisos:
-- ✅ Usa políticas RLS básicas y seguras
-- ✅ No depende de tablas externas como `users`
-- ✅ Funciona inmediatamente sin configuración adicional
-- ✅ Ideal para entornos donde no hay tabla `users` con `tenant_id`
+Este script verifica que todo funciona correctamente:
+- ✅ Prueba la estructura de la tabla
+- ✅ Verifica datos de ejemplo
+- ✅ Comprueba RLS y políticas
+- ✅ Prueba operaciones CRUD (crear, leer, actualizar, eliminar)
 
-### 3. Scripts Separados
-Si prefieres ejecutar paso a paso:
-
+### 3. Scripts Separados (Para desarrollo avanzado)
 - **`scripts/58-create-settings-table.sql`**: Solo crea la tabla y datos
 - **`scripts/59-enable-settings-rls.sql`**: Solo habilita RLS y políticas (puede tener problemas de permisos)
+- **`scripts/60-complete-settings-setup.sql`**: Script completo con políticas avanzadas
 - **`scripts/61-fix-settings-rls-policies.sql`**: Corrige políticas existentes (experimental)
+- **`scripts/62-simple-settings-rls.sql`**: Solo políticas RLS simplificadas
 
 ## 🗄️ Estructura de la Tabla
 
@@ -78,13 +87,13 @@ CREATE TABLE public.settings (
 ### Opción 1: Script Simplificado (Recomendado para evitar problemas)
 ```sql
 -- En tu cliente SQL (pgAdmin, DBeaver, etc.)
--- Ejecutar el contenido de: scripts/62-simple-settings-rls.sql
+-- Ejecutar el contenido de: scripts/63-complete-simple-settings-setup.sql
 ```
 
-### Opción 2: Script Completo (Para desarrollo)
+### Opción 2: Verificar Funcionalidad
 ```sql
--- En tu cliente SQL (pgAdmin, DBeaver, etc.)
--- Ejecutar el contenido de: scripts/60-complete-settings-setup.sql
+-- Después de ejecutar el script principal, ejecutar:
+-- scripts/64-test-settings-functionality.sql
 ```
 
 ### Opción 3: Desde Supabase Dashboard
@@ -99,7 +108,7 @@ Después de ejecutar el script, deberías ver:
 ### 1. Tabla Creada
 ```sql
 SELECT COUNT(*) FROM public.settings;
--- Debería mostrar 4 configuraciones de ejemplo
+-- Debería mostrar 4 configuraciones
 ```
 
 ### 2. RLS Habilitado
@@ -145,11 +154,15 @@ WHERE key = 'nueva_config';
 
 ### Error: "Table does not exist"
 - **Causa**: No se ejecutó el script SQL
-- **Solución**: Ejecutar `scripts/60-complete-settings-setup.sql`
+- **Solución**: Ejecutar `scripts/63-complete-simple-settings-setup.sql`
 
 ### Error: "permission denied for table users"
 - **Causa**: Las políticas RLS intentan acceder a tablas sin permisos
-- **Solución**: Usar `scripts/62-simple-settings-rls.sql` en su lugar
+- **Solución**: Usar `scripts/63-complete-simple-settings-setup.sql` en su lugar
+
+### Error: "No se guardan nuevas claves"
+- **Causa**: Tabla no existe o RLS mal configurado
+- **Solución**: Ejecutar `scripts/63-complete-simple-settings-setup.sql`
 
 ### Error: "Permission denied"
 - **Causa**: RLS no está habilitado o las políticas no están creadas
@@ -167,7 +180,8 @@ Si encuentras problemas:
 2. **Verificar base de datos**: Confirmar que la tabla `settings` existe
 3. **Verificar RLS**: Confirmar que las políticas están activas
 4. **Revisar permisos**: Verificar que el usuario tiene acceso a la tabla
-5. **Usar script simplificado**: Si hay problemas de permisos, usar `62-simple-settings-rls.sql`
+5. **Usar script simplificado**: Si hay problemas, usar `63-complete-simple-settings-setup.sql`
+6. **Ejecutar pruebas**: Usar `64-test-settings-functionality.sql` para diagnosticar
 
 ## 🎉 ¡Listo!
 
@@ -177,3 +191,4 @@ Una vez ejecutado el script SQL, la funcionalidad de configuraciones estará com
 - ✅ Datos de ejemplo cargados
 - ✅ Interfaz de usuario funcional
 - ✅ Sin problemas de permisos
+- ✅ **Nuevas claves se guardan correctamente**
