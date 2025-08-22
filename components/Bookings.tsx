@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -48,9 +48,12 @@ import {
   Filter,
   MessageSquare,
   Trash2,
-  DollarSign
+  DollarSign,
+  XCircle,
+  Loader2
 } from "lucide-react"
 import { GuestPicker } from '@/components/people/GuestPicker'
+import { ReservationStatusSelect } from '@/components/ui/reservation-status'
 
 export default function Bookings() {
 
@@ -566,6 +569,7 @@ export default function Bookings() {
                 <SelectItem value="pending">Pendientes</SelectItem>
                 <SelectItem value="cancelled">Canceladas</SelectItem>
                 <SelectItem value="completed">Completadas</SelectItem>
+                <SelectItem value="reserved">Reservada</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1593,6 +1597,7 @@ function BookingDialog({
                     <SelectItem value="confirmed">Confirmada</SelectItem>
                     <SelectItem value="cancelled">Cancelada</SelectItem>
                     <SelectItem value="completed">Completada</SelectItem>
+                    <SelectItem value="reserved">Reservada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
