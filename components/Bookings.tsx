@@ -26,7 +26,7 @@ import {
   calculateRequiredAmount,
   calculatePaymentStatus
 } from "@/lib/supabase"
-import { getPropertyChannels } from "@/lib/channels"
+import { getActivePropertyChannels } from "@/lib/channels"
 import type { PropertyChannelWithDetails } from "@/types/channels"
 import { useProperty } from "@/hooks/useProperty"
 import { useAuth } from "@/contexts/AuthContext"
@@ -1038,7 +1038,7 @@ function BookingDialog({
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
-      const channels = await getPropertyChannels(propertyId)
+      const channels = await getActivePropertyChannels(propertyId)
       setAvailableChannels(channels)
     } catch (error) {
       setAvailableChannels([])

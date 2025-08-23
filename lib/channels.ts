@@ -217,9 +217,36 @@ export async function deleteChannel(id: string): Promise<void> {
 }
 
 /**
- * Get property channels for a specific property
+ * Get property channels for a specific property (all channels for management)
  */
 export async function getPropertyChannels(propertyId: string): Promise<PropertyChannelWithDetails[]> {
+  try {
+
+    const { data, error } = await supabase
+      .from("property_channels")
+      .select(`
+        *,
+        channel:distribution_channels(*)
+      `)
+      .eq("property_id", propertyId)
+      .order("created_at")
+
+    if (error) {
+      console.error("Error fetching property channels:", error)
+      throw new Error("Error al cargar los canales de la propiedad")
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getPropertyChannels:", error)
+    throw error
+  }
+}
+
+/**
+ * Get only active property channels for a specific property (for forms and active operations)
+ */
+export async function getActivePropertyChannels(propertyId: string): Promise<PropertyChannelWithDetails[]> {
   try {
 
     const { data, error } = await supabase
@@ -233,13 +260,13 @@ export async function getPropertyChannels(propertyId: string): Promise<PropertyC
       .order("created_at")
 
     if (error) {
-      console.error("Error fetching property channels:", error)
-      throw new Error("Error al cargar los canales de la propiedad")
+      console.error("Error fetching active property channels:", error)
+      throw new Error("Error al cargar los canales activos de la propiedad")
     }
 
     return data || []
   } catch (error) {
-    console.error("Error in getPropertyChannels:", error)
+    console.error("Error in getActivePropertyChannels:", error)
     throw error
   }
 }
