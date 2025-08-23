@@ -1231,21 +1231,29 @@ function BookingDialog({
       }
 
       if (booking) {
+        // Para edición, usar el ID de la reserva original
         const { error } = await supabase
           .from("reservations")
           .update(submitData)
           .eq("id", booking.id)
         
         if (error) {
+          console.error("Error updating reservation:", error)
+          alert(`Error al actualizar la reserva: ${(error as Error).message}`)
+          return
         }
         onSave()
         onClose()
       } else {
+        // Para creación, insertar nueva reserva
         const { error } = await supabase
           .from("reservations")
           .insert([submitData])
         
         if (error) {
+          console.error("Error creating reservation:", error)
+          alert(`Error al crear la reserva: ${(error as Error).message}`)
+          return
         }
         onSave()
         onClose()
