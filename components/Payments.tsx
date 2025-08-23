@@ -712,25 +712,12 @@ function PaymentDialog({
       console.log("📋 Mostrando todas las reservas:", allReservations.length)
       return allReservations
     } else {
-      // Mostrar solo reservas no pagadas + la reserva específica del pago que se está editando
+      // Mostrar solo reservas no pagadas (pendientes de pago)
       const unpaidReservations = getUnpaidReservations()
-      
-      
-      // Si estamos editando un pago y tiene una reserva asociada
-      if (payment?.reservation_id) {
-        const associatedReservation = reservations.find(r => r.id === payment.reservation_id)
-        
-        // Si la reserva asociada no está en la lista de no pagadas, agregarla
-        if (associatedReservation && !unpaidReservations.find(r => r.id === associatedReservation.id)) {
-          console.log("➕ Agregando reserva asociada al pago:", associatedReservation.guest?.name)
-          return [associatedReservation, ...unpaidReservations]
-        }
-      }
-      
-      console.log("📋 Retornando solo reservas no pagadas")
+      console.log("📋 Retornando solo reservas no pagadas:", unpaidReservations.length)
       return unpaidReservations
     }
-  }, [showAllReservations, payment?.reservation_id, reservations, propertyId])
+  }, [showAllReservations, reservations, propertyId])
 
   // Función para manejar cambios en el formulario
   const handleInputChange = (field: string, value: string | number) => {
@@ -768,15 +755,8 @@ function PaymentDialog({
         fee: String(payment.fee || "0"),
       })
       
-      // Si estamos editando un pago, verificar si la reserva asociada está en la lista de pendientes
-      // Si no está, marcar automáticamente el checkbox para mostrar todas las reservas
-      if (payment.reservation_id) {
-        const unpaidReservations = getUnpaidReservations()
-        const associatedReservation = unpaidReservations.find(r => r.id === payment.reservation_id)
-        if (!associatedReservation) {
-          setShowAllReservations(true)
-        }
-      }
+      // Al editar un pago, mantener el estado del checkbox como estaba
+      // El usuario puede decidir si quiere ver todas las reservas o solo las pendientes
     } else {
       clearForm()
     }
