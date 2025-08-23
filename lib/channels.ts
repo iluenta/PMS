@@ -229,6 +229,7 @@ export async function getPropertyChannels(propertyId: string): Promise<PropertyC
         channel:distribution_channels(*)
       `)
       .eq("property_id", propertyId)
+      .eq("is_enabled", true) // Solo canales activos
       .order("created_at")
 
     if (error) {
