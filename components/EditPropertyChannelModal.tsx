@@ -5,12 +5,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useProperty } from "@/hooks/useProperty"
-import { updatePropertyChannel } from "@/lib/channels"
-import type { PropertyChannelWithDetails, UpdatePropertyChannelData } from "@/types/channels"
+import { getChannels, updatePropertyChannel } from "@/lib/channels"
+import type { PropertyChannelWithDetails, UpdatePropertyChannelData, DistributionChannel } from "@/types/channels"
 import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star, Building } from "lucide-react"
 
 interface EditPropertyChannelModalProps {
@@ -27,6 +28,9 @@ export default function EditPropertyChannelModal({
   onSuccess,
 }: EditPropertyChannelModalProps) {
   const [loading, setLoading] = useState(false)
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const [availableChannels, setAvailableChannels] = useState<DistributionChannel[]>([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("")
   const [formData, setFormData] = useState<UpdatePropertyChannelData>({
     is_enabled: true,
     sync_enabled: true,
@@ -46,36 +50,72 @@ export default function EditPropertyChannelModal({
   const { toast } = useToast()
   const { selectedProperty } = useProperty()
 
-  // Cargar datos del canal cuando se abre el modal
+  // Cargar canales disponibles y datos del canal cuando se abre el modal
   useEffect(() => {
-    if (isOpen && propertyChannel) {
-      setFormData({
-        is_enabled: propertyChannel.is_enabled,
-        sync_enabled: propertyChannel.sync_enabled,
-        auto_update_ratings: propertyChannel.auto_update_ratings,
-        external_property_id: propertyChannel.external_property_id || "",
-        external_listing_id: propertyChannel.external_listing_id || "",
-        external_place_id: propertyChannel.external_place_id || "",
-        listing_url: propertyChannel.listing_url || "",
-        review_url: propertyChannel.review_url || "",
-        price_adjustment_percentage: propertyChannel.price_adjustment_percentage || 0,
-        commission_override_charge: propertyChannel.commission_override_charge || 0,
-        commission_override_sale: propertyChannel.commission_override_sale || 0,
-        availability_sync_enabled: propertyChannel.availability_sync_enabled,
-        instant_booking_enabled: propertyChannel.instant_booking_enabled,
-      })
+    if (isOpen) {
+      loadAvailableChannels()
+      if (propertyChannel) {
+        setSelectedChannelId(propertyChannel.channel_id)
+        setFormData({
+          is_enabled: propertyChannel.is_enabled,
+          sync_enabled: propertyChannel.sync_enabled,
+          auto_update_ratings: propertyChannel.auto_update_ratings,
+          external_property_id: propertyChannel.external_property_id || "",
+          external_listing_id: propertyChannel.external_listing_id || "",
+          external_place_id: propertyChannel.external_place_id || "",
+          listing_url: propertyChannel.listing_url || "",
+          review_url: propertyChannel.review_url || "",
+          price_adjustment_percentage: propertyChannel.price_adjustment_percentage || 0,
+          commission_override_charge: propertyChannel.commission_override_charge || 0,
+          commission_override_sale: propertyChannel.commission_override_sale || 0,
+          availability_sync_enabled: propertyChannel.availability_sync_enabled,
+          instant_booking_enabled: propertyChannel.instant_booking_enabled,
+        })
+      }
     }
   }, [isOpen, propertyChannel])
+
+  const loadAvailableChannels = async () => {
+    try {
+      setChannelsLoading(true)
+      const channels = await getChannels()
+      setAvailableChannels(channels)
+    } catch (error) {
+      console.error("Error loading channels:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los canales disponibles",
+        variant: "destructive",
+      })
+    } finally {
+      setChannelsLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!propertyChannel) return
 
+    if (!selectedChannelId) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar un canal",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setLoading(true)
       
-      await updatePropertyChannel(propertyChannel.id, formData)
+      // Actualizar también el channel_id si ha cambiado
+      const updateData = {
+        ...formData,
+        channel_id: selectedChannelId
+      }
+      
+      await updatePropertyChannel(propertyChannel.id, updateData)
       
       toast({
         title: "Canal actualizado",
@@ -100,6 +140,9 @@ export default function EditPropertyChannelModal({
   const handleClose = () => {
     onClose()
   }
+
+  // Obtener el canal seleccionado
+  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -132,22 +175,55 @@ export default function EditPropertyChannelModal({
             </div>
           )}
 
-          {/* Información del canal */}
-          {propertyChannel && (
-            <div className="space-y-2">
-              <Label>Canal</Label>
-              <div className="p-3 bg-gray-50 rounded-md border">
-                <div className="flex items-center gap-2">
-                  {propertyChannel.channel?.logo && (
-                    <img 
-                      src={propertyChannel.channel.logo} 
-                      alt={propertyChannel.channel.name}
-                      className="w-4 h-4 object-contain"
-                    />
-                  )}
-                  <span className="font-medium">{propertyChannel.channel?.name || 'Canal'}</span>
-                </div>
+          {/* Selector de Canal */}
+          <div className="space-y-2">
+            <Label htmlFor="channel">Canal de Distribución *</Label>
+            {channelsLoading ? (
+              <div className="flex items-center gap-2 p-2 border rounded-md">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Cargando canales...</span>
               </div>
+            ) : (
+              <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableChannels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      <div className="flex items-center gap-2">
+                        {channel.logo && (
+                          <img 
+                            src={channel.logo} 
+                            alt={channel.name}
+                            className="w-4 h-4 object-contain"
+                          />
+                        )}
+                        <span>{channel.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Preview del canal seleccionado */}
+          {selectedChannel && (
+            <div className="p-4 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-3 mb-2">
+                {selectedChannel.logo && (
+                  <img 
+                    src={selectedChannel.logo} 
+                    alt={selectedChannel.name}
+                    className="w-8 h-8 object-contain"
+                  />
+                )}
+                <span className="font-medium">{selectedChannel.name}</span>
+              </div>
+              <p className="text-sm text-gray-600">
+                Canal seleccionado - Configura los detalles específicos a continuación
+              </p>
             </div>
           )}
 
