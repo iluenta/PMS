@@ -54,6 +54,7 @@ import {
 } from "lucide-react"
 import { GuestPicker } from '@/components/people/GuestPicker'
 import { ReservationStatusSelect } from '@/components/ui/reservation-status'
+import { useToast } from '@/hooks/use-toast'
 
 export default function Bookings() {
 
@@ -353,7 +354,18 @@ export default function Bookings() {
   const memoizedGuests = useMemo(() => guests, [guests])
   const memoizedReservationPayments = useMemo(() => reservationPayments, [reservationPayments])
 
+  // Función para obtener el color del estado desde settings
   const getStatusColor = (status: string) => {
+    // Mapeo de estados en inglés a español para compatibilidad
+    const statusMap: { [key: string]: string } = {
+      "confirmed": "Confirmada",
+      "pending": "Pendiente", 
+      "cancelled": "Cancelada",
+      "completed": "Completada",
+      "reserved": "Reservada"
+    }
+    
+    // Retornar color por defecto si no hay configuración
     switch (status) {
       case "confirmed":
         return "bg-green-100 text-green-800"
@@ -363,9 +375,23 @@ export default function Bookings() {
         return "bg-red-100 text-red-800"
       case "completed":
         return "bg-blue-100 text-blue-800"
+      case "reserved":
+        return "bg-purple-100 text-purple-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  // Función para obtener el texto del estado en español
+  const getStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      "confirmed": "Confirmada",
+      "pending": "Pendiente", 
+      "cancelled": "Cancelada",
+      "completed": "Completada",
+      "reserved": "Reservada"
+    }
+    return statusMap[status] || status
   }
 
   const getStatusIcon = (status: string) => {
@@ -377,6 +403,8 @@ export default function Bookings() {
       case "cancelled":
         return <AlertCircle className="h-4 w-4" />
       case "completed":
+        return <CheckCircle className="h-4 w-4" />
+      case "reserved":
         return <CheckCircle className="h-4 w-4" />
       default:
         return <Clock className="h-4 w-4" />
@@ -394,6 +422,17 @@ export default function Bookings() {
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-200"
     }
+  }
+
+  // Función para obtener el texto del estado de pago en español
+  const getPaymentStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      "paid": "Pagado",
+      "pending": "Pendiente",
+      "partial": "Parcial",
+      "refunded": "Reembolsado"
+    }
+    return statusMap[status] || status
   }
 
   const getPaymentStatusIcon = (status: string) => {
@@ -722,7 +761,7 @@ export default function Bookings() {
                   <Badge className={`${getStatusColor(booking.status)} rounded-full`}>
                     <span className="inline-flex items-center gap-1">
                       {getStatusIcon(booking.status)}
-                      <span className="capitalize">{booking.status}</span>
+                      <span>{getStatusText(booking.status)}</span>
                     </span>
                   </Badge>
                 </div>
@@ -739,7 +778,7 @@ export default function Bookings() {
                   <Badge className={`${getPaymentStatusColor(paymentStatusToShow)} rounded-full`}>
                     <span className="inline-flex items-center gap-1">
                       {getPaymentStatusIcon(paymentStatusToShow)}
-                      <span className="capitalize">{paymentStatusToShow}</span>
+                      <span>{getPaymentStatusText(paymentStatusToShow)}</span>
                     </span>
                   </Badge>
                 </div>
