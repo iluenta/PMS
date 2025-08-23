@@ -195,13 +195,18 @@ export default function Payments() {
     const reservation = reservations.find(r => r.id === reservationId)
     
     if (!reservation) {
+      console.log(`❌ No se encontró la reserva ${reservationId}`)
       return { totalPaid, totalAmount: 0, percentage: 0 }
     }
     
     // Usar calculateRequiredAmount en lugar de total_amount para obtener el importe real requerido
     const totalAmount = calculateRequiredAmount(reservation)
     
-    
+    console.log(`💰 Reserva ${reservation.guest?.name}:`)
+    console.log(`  - Pagos completados: ${reservationPayments.length}`)
+    console.log(`  - Total pagado: €${totalPaid}`)
+    console.log(`  - Total requerido: €${totalAmount}`)
+    console.log(`  - Porcentaje: ${totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0}%`)
     
     return { 
       totalPaid, 
@@ -690,16 +695,34 @@ function PaymentDialog({
   const getUnpaidReservations = () => {
     if (!user?.tenant_id) return []
     
-    return reservations.filter(reservation => {
+    console.log("🔍 Buscando reservas no pagadas para propiedad:", propertyId)
+    console.log("📊 Total de reservas disponibles:", reservations.length)
+    
+    const unpaid = reservations.filter(reservation => {
       // Asegurar que la reserva pertenece a la propiedad seleccionada
-      if (reservation.property_id !== propertyId) return false
+      if (reservation.property_id !== propertyId) {
+        console.log(`❌ Reserva ${reservation.id} no pertenece a la propiedad ${propertyId}`)
+        return false
+      }
       
       // Calcular el progreso de pagos para esta reserva
       const { totalPaid, totalAmount, percentage } = getReservationPaymentProgress(reservation.id)
       
+      console.log(`📋 Reserva ${reservation.guest?.name}: totalPaid=${totalPaid}, totalAmount=${totalAmount}, percentage=${percentage}%`)
+      
       // Incluir reservas que no estén pagadas al 100%
-      return percentage < 100
+      const isUnpaid = percentage < 100
+      if (isUnpaid) {
+        console.log(`✅ Reserva NO pagada: ${reservation.guest?.name} - ${percentage.toFixed(1)}% pagado`)
+      } else {
+        console.log(`❌ Reserva pagada al 100%: ${reservation.guest?.name} - ${percentage.toFixed(1)}% pagado`)
+      }
+      
+      return isUnpaid
     })
+    
+    console.log(`📊 Reservas no pagadas encontradas: ${unpaid.length}`)
+    return unpaid
   }
 
   // Función para obtener todas las reservas que deben aparecer en el Select
