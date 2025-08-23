@@ -1019,9 +1019,9 @@ function BookingDialog({
   }, [formData.property_id, formData.booking_source, formData.base_amount, booking])
 
   // Recalcular comisiones cuando cambie el precio base y haya porcentajes configurados
-  // Solo para nuevas reservas, no para edición
+  // Para nuevas reservas Y para modificación (ambos casos)
   useEffect(() => {
-    if (formData.booking_source !== "Propio" && commissionPercentages.sale !== null && commissionPercentages.charge !== null && !booking) {
+    if (formData.booking_source !== "Propio" && commissionPercentages.sale !== null && commissionPercentages.charge !== null) {
       const baseAmount = formData.base_amount || 0
       const saleCommission = commissionPercentages.sale ? 
         Math.round((baseAmount * commissionPercentages.sale / 100) * 100) / 100 : 0
@@ -1034,7 +1034,7 @@ function BookingDialog({
         collection_commission: chargeCommission
       }))
     }
-  }, [formData.base_amount, commissionPercentages, booking])
+  }, [formData.base_amount, commissionPercentages, formData.booking_source])
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
@@ -1311,14 +1311,14 @@ function BookingDialog({
   }, [formData.booking_source, externalIdError])
 
   // Cargar porcentajes de comisión cuando cambie el canal
-  // Solo para nuevas reservas, no para edición
+  // Para nuevas reservas Y para modificación (ambos casos)
   useEffect(() => {
-    if (formData.property_id && formData.booking_source && formData.booking_source !== "Direct" && !booking) {
+    if (formData.property_id && formData.booking_source && formData.booking_source !== "Direct") {
       loadCommissionPercentages()
-    } else if (formData.booking_source === "Direct" || booking) {
+    } else if (formData.booking_source === "Direct") {
       setCommissionPercentages({ sale: null, charge: null })
     }
-  }, [formData.property_id, formData.booking_source, booking])
+  }, [formData.property_id, formData.booking_source])
 
   const loadCommissionPercentages = async () => {
     try {
