@@ -73,6 +73,7 @@ export default function Bookings() {
   const [channelFilter, setChannelFilter] = useState<string>("all")
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("pending")
   const [sortFilter, setSortFilter] = useState<string>("checkin_asc")
+  const [showOnlyCancelled, setShowOnlyCancelled] = useState(false)
 
   // Global property context
   const { selectedProperty } = useProperty()
@@ -197,24 +198,36 @@ export default function Bookings() {
     const confirmed = filteredBookings.filter(b => b.status === 'confirmed').length
     const cancelled = filteredBookings.filter(b => b.status === 'cancelled').length
     
-    // Calculate real revenue (excluding cancelled bookings)
-    const realRevenue = filteredBookings
-      .filter(b => b.status !== 'cancelled')
-      .reduce((sum, booking) => sum + (booking.total_amount || 0), 0)
+    // Calculate revenue based on showOnlyCancelled filter
+    let revenue: number
+    let revenueLabel: string
+    let revenueColor: string
     
-    // Calculate lost revenue from cancelled bookings
-    const lostRevenue = filteredBookings
-      .filter(b => b.status === 'cancelled')
-      .reduce((sum, booking) => sum + (booking.total_amount || 0), 0)
+    if (showOnlyCancelled) {
+      // Show only cancelled bookings revenue in red
+      revenue = filteredBookings
+        .filter(b => b.status === 'cancelled')
+        .reduce((sum, booking) => sum + (booking.total_amount || 0), 0)
+      revenueLabel = "Ingresos Canceladas"
+      revenueColor = "text-red-600"
+    } else {
+      // Show all bookings except cancelled in black
+      revenue = filteredBookings
+        .filter(b => b.status !== 'cancelled')
+        .reduce((sum, booking) => sum + (booking.total_amount || 0), 0)
+      revenueLabel = "Ingresos"
+      revenueColor = "text-gray-900"
+    }
 
     return {
       total,
       confirmed,
       cancelled,
-      revenue: realRevenue,
-      lostRevenue: lostRevenue
+      revenue,
+      revenueLabel,
+      revenueColor
     }
-  }, [filteredBookings])
+  }, [filteredBookings, showOnlyCancelled])
 
   const fetchData = useCallback(async () => {
     try {
@@ -716,22 +729,42 @@ export default function Bookings() {
         {/* Ingresos */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Ingresos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-gray-600">{statistics.revenueLabel}</CardTitle>
+            <div className="flex items-center space-x-2">
+              <Badge 
+                variant={showOnlyCancelled ? "default" : "secondary"}
+                className={`cursor-pointer transition-colors ${
+                  showOnlyCancelled 
+                    ? "bg-red-500 hover:bg-red-600 text-white" 
+                    : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                }`}
+                onClick={() => setShowOnlyCancelled(!showOnlyCancelled)}
+              >
+                Canceladas
+              </Badge>
+              <TrendingUp className="h-4 w-4 text-green-500" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">
+            <div className={`text-2xl font-bold ${statistics.revenueColor}`}>
               €{statistics.revenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
             </div>
             <div className="flex items-center justify-between mt-1">
               <p className="text-xs text-gray-500">
-                Promedio: €{statistics.total > 0 ? (statistics.revenue / (statistics.total - statistics.cancelled)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }) : '0,00'} por reserva
+                Promedio: €{(() => {
+                  if (showOnlyCancelled) {
+                    // Para canceladas: ingresos de canceladas / número de canceladas
+                    return statistics.cancelled > 0 
+                      ? (statistics.revenue / statistics.cancelled).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
+                      : '0,00'
+                  } else {
+                    // Para ingresos normales: ingresos / (total - canceladas)
+                    return (statistics.total - statistics.cancelled) > 0 
+                      ? (statistics.revenue / (statistics.total - statistics.cancelled)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
+                      : '0,00'
+                  }
+                })()} por reserva
               </p>
-              {statistics.lostRevenue > 0 && (
-                <Badge variant="secondary" className="bg-red-500 text-white hover:bg-red-500 text-xs">
-                  -€{statistics.lostRevenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                </Badge>
-              )}
             </div>
           </CardContent>
         </Card>
