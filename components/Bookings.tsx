@@ -1845,55 +1845,61 @@ function BookingDialog({
                       )}
                     </div>
                     
-                    {/* Sección de Total, Importe pagado y Importe pendiente */}
-                    {booking && (() => {
-                      const currentBooking = {
-                        ...booking,
-                        total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
-                        channel_commission: formData.channel_commission || 0,
-                        collection_commission: formData.collection_commission || 0,
-                        booking_source: formData.booking_source
-                      }
-                      
-                      const { requiredAmount, paymentStatus, totalPayments, pendingAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
-                      
-                      return (
-                        <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
-                          {/* Total */}
-                          <div className="flex flex-col items-center space-y-2">
-                            <div className="text-center">
-                              <Label className="text-sm font-medium text-gray-700 block">Total</Label>
-                              <div className="text-xs text-gray-500">(Sin comisiones)</div>
-                            </div>
-                            <div className="text-xl font-bold text-gray-900 text-center">
-                              €{currentBooking.total_amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                            </div>
-                          </div>
-                          
-                          {/* Importe pagado */}
-                          <div className="flex flex-col items-center space-y-2">
-                            <div className="text-center">
-                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
-                              <div className="text-xs text-gray-500">pagado</div>
-                            </div>
-                            <div className="text-xl font-bold text-green-600 text-center">
-                              €{totalPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                            </div>
-                          </div>
-                          
-                          {/* Importe pendiente */}
-                          <div className="flex flex-col items-center space-y-2">
-                            <div className="text-center">
-                              <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
-                              <div className="text-xs text-gray-500">pendiente</div>
-                            </div>
-                            <div className="text-xl font-bold text-orange-600 text-center">
-                              €{pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-                            </div>
-                          </div>
+                    {/* Sección de Total, Importe pagado y Importe pendiente - SIEMPRE VISIBLE */}
+                    <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
+                      {/* Total */}
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="text-center">
+                          <Label className="text-sm font-medium text-gray-700 block">Total</Label>
+                          <div className="text-xs text-gray-500">(Sin comisiones)</div>
                         </div>
-                      )
-                    })()}
+                        <div className="text-xl font-bold text-gray-900 text-center">
+                          €{((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                        </div>
+                      </div>
+                      
+                      {/* Importe pagado */}
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="text-center">
+                          <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                          <div className="text-xs text-gray-500">pagado</div>
+                        </div>
+                        <div className="text-xl font-bold text-green-600 text-center">
+                          {booking ? (() => {
+                            const currentBooking = {
+                              ...booking,
+                              total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                              channel_commission: formData.channel_commission || 0,
+                              collection_commission: formData.collection_commission || 0,
+                              booking_source: formData.booking_source
+                            }
+                            const { totalPayments } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
+                            return `€${totalPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`
+                          })() : '€0,00'}
+                        </div>
+                      </div>
+                      
+                      {/* Importe pendiente */}
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="text-center">
+                          <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
+                          <div className="text-xs text-gray-500">pendiente</div>
+                        </div>
+                        <div className="text-xl font-bold text-orange-600 text-center">
+                          {booking ? (() => {
+                            const currentBooking = {
+                              ...booking,
+                              total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                              channel_commission: formData.channel_commission || 0,
+                              collection_commission: formData.collection_commission || 0,
+                              booking_source: formData.booking_source
+                            }
+                            const { pendingAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
+                            return `€${pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`
+                          })() : `€${((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
         </div>
