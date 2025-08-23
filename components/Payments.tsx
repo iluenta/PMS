@@ -785,6 +785,8 @@ function PaymentDialog({
     }
   }, [payment])
 
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -869,6 +871,23 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
     ? (payments as Payment[]).filter((p: Payment) => p.reservation_id === selectedReservation.id && p.status === 'completed')
     : []
   const totalCompletedPaidForSelected = partialsForSelected.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+
+  // Actualizar automáticamente el importe cuando se seleccione una reserva
+  useEffect(() => {
+    if (selectedReservation && reservationAmounts) {
+      const calculatedAmount = Math.max(0, reservationAmounts.finalAmount - totalCompletedPaidForSelected)
+      console.log("💰 Actualizando importe automáticamente:", {
+        finalAmount: reservationAmounts.finalAmount,
+        totalCompletedPaid: totalCompletedPaidForSelected,
+        calculatedAmount: calculatedAmount
+      })
+      
+      setFormData(prev => ({
+        ...prev,
+        amount: String(calculatedAmount.toFixed(2))
+      }))
+    }
+  }, [selectedReservation, reservationAmounts, totalCompletedPaidForSelected])
 
   return (
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
