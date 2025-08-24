@@ -16,7 +16,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase, type Payment, type Reservation, calculateRequiredAmount, calculateReservationAmounts, calculatePaymentStatus } from "@/lib/supabase"
+import {
+  supabase,
+  type Payment,
+  type Reservation,
+  calculateRequiredAmount,
+  calculateReservationAmounts,
+  calculatePaymentStatus,
+} from "@/lib/supabase"
 import { useProperty } from "@/hooks/useProperty"
 import { useAuth } from "@/contexts/AuthContext"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
@@ -365,6 +372,18 @@ export default function Payments() {
     }
   }
 
+  const [formData, setFormData] = useState({
+    reservation_id: "",
+    customer_name: "",
+    amount: "",
+    method: "credit_card",
+    status: "completed",
+    date: new Date().toISOString().split("T")[0],
+    reference: "",
+    notes: "",
+    fee: "0",
+  })
+
   const handleEdit = (payment: Payment) => {
     setEditingPayment(payment)
     setShowPaymentDialog(true)
@@ -373,6 +392,19 @@ export default function Payments() {
   const handleAdd = () => {
     console.log("➕ Opening new payment dialog")
     setEditingPayment(null)
+    // Reset the form state
+    setFormData({
+      reservation_id: "",
+      customer_name: "",
+      amount: "",
+      method: "credit_card",
+      status: "completed",
+      date: new Date().toISOString().split("T")[0],
+      reference: "",
+      notes: "",
+      fee: "0",
+    })
+    // Open the dialog
     setShowPaymentDialog(true)
   }
 
@@ -516,11 +548,14 @@ export default function Payments() {
                 </Button>
               </DialogTrigger>
               <PaymentDialog
+                key={editingPayment?.id || 'new-payment'}
                 payment={editingPayment}
+                formData={formData}
+                onFormDataChange={setFormData}
                 propertyId={selectedProperty.id}
                 reservations={reservations}
                 getReservationPaymentProgress={getReservationPaymentProgress}
-                  updateReservationPaymentStatus={updateReservationPaymentStatus}
+                updateReservationPaymentStatus={updateReservationPaymentStatus}
                 payments={payments}
                 onClose={() => {
                   console.log("🚪 Closing dialog and clearing state")
@@ -634,6 +669,8 @@ export default function Payments() {
 
 function PaymentDialog({
   payment,
+  formData,
+  onFormDataChange,
   propertyId,
   reservations,
   getReservationPaymentProgress,
@@ -643,6 +680,28 @@ function PaymentDialog({
   onSave,
 }: {
   payment: Payment | null
+  formData: {
+    reservation_id: string
+    customer_name: string
+    amount: string
+    method: string
+    status: string
+    date: string
+    reference: string
+    notes: string
+    fee: string
+  }
+  onFormDataChange: (data: {
+    reservation_id: string
+    customer_name: string
+    amount: string
+    method: string
+    status: string
+    date: string
+    reference: string
+    notes: string
+    fee: string
+  }) => void
   propertyId: string
   reservations: Reservation[]
   getReservationPaymentProgress: (reservationId: string) => { totalPaid: number; totalAmount: number; percentage: number }
@@ -652,43 +711,15 @@ function PaymentDialog({
   onSave: () => void
 }) {
   const { user } = useAuth()
-  const [formData, setFormData] = useState({
-    reservation_id: "",
-    customer_name: "",
-    amount: "",
-    method: "credit_card",
-    status: "completed",
-    date: new Date().toISOString().split("T")[0],
-    reference: "",
-    notes: "",
-    fee: "0",
-  })
-  
   // Estado para controlar si mostrar todas las reservas o solo las pendientes
   const [showAllReservations, setShowAllReservations] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Función para manejar el cambio del checkbox
   const handleCheckboxChange = (checked: boolean) => {
     console.log("✅ Checkbox cambiado:", checked)
     setShowAllReservations(checked)
-  }
-
-  // Función para limpiar el formulario
-  const clearForm = () => {
-    console.log("🧹 Clearing form data")
-    setFormData({
-      reservation_id: "",
-      customer_name: "",
-      amount: "",
-      method: "credit_card",
-      status: "completed",
-      date: new Date().toISOString().split("T")[0],
-      reference: "",
-      notes: "",
-      fee: "0",
-    })
-    // Resetear el checkbox al crear un nuevo pago
-    setShowAllReservations(false)
+    setIsInitialLoad(false)
   }
 
   // Función para obtener reservas no pagadas al 100% de la propiedad seleccionada
@@ -727,24 +758,23 @@ function PaymentDialog({
 
   // Función para obtener todas las reservas que deben aparecer en el Select
   const allReservationsForSelect = useMemo(() => {
-    console.log("🔄 Recalculando reservas para mostrar. showAllReservations:", showAllReservations)
+    console.log("🔄 Recalculando reservas para mostrar. showAllReservations:", showAllReservations, "isInitialLoad:", isInitialLoad)
     
-    if (showAllReservations) {
-      // Si el checkbox está marcado, mostrar todas las reservas de la propiedad
-      const allReservations = reservations.filter(reservation => reservation.property_id === propertyId)
-      console.log("📋 Mostrando todas las reservas:", allReservations.length)
-      return allReservations
-    } else {
-      // Mostrar solo reservas no pagadas (pendientes de pago)
+    // Si es la carga inicial o no se muestran todas las reservas, mostrar solo las no pagadas
+    if (isInitialLoad || !showAllReservations) {
       const unpaidReservations = getUnpaidReservations()
-      console.log("📋 Retornando solo reservas no pagadas:", unpaidReservations.length)
+      console.log("📋 Primera carga - Mostrando solo reservas no pagadas:", unpaidReservations.length)
       return unpaidReservations
     }
-  }, [showAllReservations, propertyId, reservations])
+    
+    // Mostrar todas las reservas si el checkbox está marcado
+    console.log("📋 Mostrando TODAS las reservas:", reservations.length)
+    return reservations.filter(r => r.property_id === propertyId)
+  }, [showAllReservations, propertyId, reservations, isInitialLoad])
 
   // Función para manejar cambios en el formulario
   const handleInputChange = (field: string, value: string | number) => {
-    setFormData(prev => ({
+    onFormDataChange(prev => ({
       ...prev,
       [field]: String(value) // Convertir a string para mantener consistencia
     }))
@@ -754,7 +784,7 @@ function PaymentDialog({
   const handleReservationChange = (reservationId: string) => {
     const reservation = reservations.find(r => r.id === reservationId)
     if (reservation) {
-      setFormData(prev => ({
+      onFormDataChange(prev => ({
         ...prev,
         reservation_id: reservationId,
         customer_name: reservation.guest?.name || ""
@@ -762,11 +792,11 @@ function PaymentDialog({
     }
   }
 
-  // Cargar datos del pago si estamos editando
+  // Reset form when the payment prop changes
   useEffect(() => {
     if (payment) {
       console.log("📝 Loading payment data for editing:", payment)
-      setFormData({
+      onFormDataChange({
         reservation_id: payment.reservation_id || "",
         customer_name: payment.customer_name || "",
         amount: String(payment.amount || ""),
@@ -777,15 +807,25 @@ function PaymentDialog({
         notes: payment.notes || "",
         fee: String(payment.fee || "0"),
       })
-      
-      // Al editar un pago, mantener el estado del checkbox como estaba
-      // El usuario puede decidir si quiere ver todas las reservas o solo las pendientes
     } else {
-      clearForm()
+      // Reset form for new payment
+      console.log("🆕 Resetting form for new payment")
+      onFormDataChange({
+        reservation_id: "",
+        customer_name: "",
+        amount: "",
+        method: "credit_card",
+        status: "completed",
+        date: new Date().toISOString().split("T")[0],
+        reference: "",
+        notes: "",
+        fee: "0",
+      })
     }
-  }, [payment])
-
-
+    // Reset UI states
+    setShowAllReservations(false)
+    setIsInitialLoad(true)
+  }, [payment]) // Only depend on payment prop
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -889,7 +929,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
         calculatedAmount: calculatedAmount
       })
       
-      setFormData(prev => ({
+      onFormDataChange(prev => ({
         ...prev,
         amount: String(calculatedAmount.toFixed(2))
       }))
@@ -920,14 +960,17 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           </Label>
         </div>
 
-        {/* Reserva como primer campo */}
-        <div className="space-y-2">
-          <Label htmlFor="reservation_id">Reserva *</Label>
-          <Select
-            value={formData.reservation_id}
-            onValueChange={handleReservationChange}
-            required
-          >
+                 {/* Reserva como primer campo */}
+         <div className="space-y-2">
+           <Label htmlFor="reservation_id">Reserva *</Label>
+           <Select
+             value={formData.reservation_id}
+             onValueChange={(value) => {
+               console.log("🔽 Selected reservation:", value)
+               handleReservationChange(value)
+             }}
+             disabled={!propertyId}
+           >
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar reserva" />
             </SelectTrigger>
@@ -955,7 +998,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
             <Input
               id="customer_name"
               value={formData.customer_name}
-              onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+              onChange={(e) => handleInputChange("customer_name", e.target.value)}
               required
               readOnly={formData.reservation_id !== "" && formData.reservation_id !== "no_reservation"}
             />
@@ -1017,10 +1060,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                   min="0"
                   step="0.01"
                   value={formData.amount}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setFormData({ ...formData, amount: value })
-                  }}
+                  onChange={(e) => handleInputChange("amount", e.target.value)}
                   className="bg-white font-semibold"
                   required
                 />
@@ -1042,10 +1082,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               min="0"
               step="0.01"
               value={formData.amount || ""}
-              onChange={(e) => {
-                const value = e.target.value
-                setFormData({ ...formData, amount: value })
-              }}
+              onChange={(e) => handleInputChange("amount", e.target.value)}
               required
               className="font-semibold"
             />
@@ -1057,7 +1094,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
             <Label htmlFor="method">Método de Pago</Label>
             <Select
               value={formData.method}
-              onValueChange={(value) => setFormData({ ...formData, method: value as Payment['method'] })}
+              onValueChange={(value) => handleInputChange("method", value)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -1076,7 +1113,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
             <Label htmlFor="status">Estado</Label>
             <Select
               value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value as Payment['status'] })}
+              onValueChange={(value) => handleInputChange("status", value)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -1098,7 +1135,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               id="date"
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              onChange={(e) => handleInputChange("date", e.target.value)}
               required
             />
           </div>
@@ -1110,10 +1147,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
               min="0"
               step="0.01"
               value={formData.fee || ""}
-              onChange={(e) => {
-                const value = e.target.value
-                setFormData({ ...formData, fee: value })
-              }}
+              onChange={(e) => handleInputChange("fee", e.target.value)}
             />
           </div>
         </div>
@@ -1123,7 +1157,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           <Input
             id="reference"
             value={formData.reference}
-            onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+            onChange={(e) => handleInputChange("reference", e.target.value)}
             placeholder="Número de referencia del pago"
           />
         </div>
@@ -1133,7 +1167,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
           <Textarea
             id="notes"
             value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            onChange={(e) => handleInputChange("notes", e.target.value)}
             placeholder="Notas adicionales sobre el pago"
             rows={3}
           />
