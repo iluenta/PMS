@@ -740,7 +740,7 @@ function PaymentDialog({
       console.log("📋 Retornando solo reservas no pagadas:", unpaidReservations.length)
       return unpaidReservations
     }
-  }, [showAllReservations, reservations, propertyId])
+  }, [showAllReservations, propertyId, reservations])
 
   // Función para manejar cambios en el formulario
   const handleInputChange = (field: string, value: string | number) => {
@@ -867,10 +867,17 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
     : null
 
   const reservationAmounts = selectedReservation ? calculateReservationAmounts(selectedReservation) : null
-  const partialsForSelected: Payment[] = selectedReservation 
-    ? (payments as Payment[]).filter((p: Payment) => p.reservation_id === selectedReservation.id && p.status === 'completed')
-    : []
-  const totalCompletedPaidForSelected = partialsForSelected.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+  
+  // Usar useMemo para estabilizar el cálculo de pagos parciales
+  const totalCompletedPaidForSelected = useMemo(() => {
+    if (!selectedReservation) return 0
+    
+    const partialsForSelected: Payment[] = (payments as Payment[]).filter(
+      (p: Payment) => p.reservation_id === selectedReservation.id && p.status === 'completed'
+    )
+    
+    return partialsForSelected.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+  }, [selectedReservation?.id, payments])
 
   // Actualizar automáticamente el importe cuando se seleccione una reserva
   useEffect(() => {
@@ -887,7 +894,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
         amount: String(calculatedAmount.toFixed(2))
       }))
     }
-  }, [selectedReservation, reservationAmounts, totalCompletedPaidForSelected])
+  }, [selectedReservation?.id, reservationAmounts?.finalAmount, totalCompletedPaidForSelected])
 
   return (
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
