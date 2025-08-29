@@ -33,12 +33,39 @@ export function usePropertyExpensesFilters({ expenses, categories, subcategories
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [subcategoryFilter, setSubcategoryFilter] = useState<string>("all")
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
+  const [yearFilter, setYearFilter] = useState<string>(new Date().getFullYear().toString())
   const [sortFilter, setSortFilter] = useState<string>("date_desc")
 
   // Reset subcategory filter cuando cambia category
   useEffect(() => {
     setSubcategoryFilter("all")
   }, [categoryFilter])
+
+  // Función para obtener años disponibles basados en datos existentes
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    const years = new Set<number>()
+    
+    // Años disponibles basados en los gastos existentes
+    expenses.forEach(expense => {
+      if (expense.date) {
+        years.add(new Date(expense.date).getFullYear())
+      }
+    })
+    
+    // Siempre incluir el año actual
+    years.add(currentYear)
+    
+    // Ordenar de más reciente a más antiguo
+    return Array.from(years).sort((a, b) => b - a)
+  }, [expenses])
+
+  // Función para verificar si una fecha está en el año seleccionado
+  const isDateInYear = (date: string, year: string) => {
+    if (year === "all") return true
+    const dateYear = new Date(date).getFullYear().toString()
+    return dateYear === year
+  }
 
   // Subcategorías filtradas para el filtro
   const filteredSubcategoriesForFilter = useMemo(() => {
@@ -115,6 +142,11 @@ export function usePropertyExpensesFilters({ expenses, categories, subcategories
       }
     }
 
+    // Filtro por año (basado en la fecha del gasto)
+    if (yearFilter !== "all") {
+      filtered = filtered.filter(expense => isDateInYear(expense.date, yearFilter))
+    }
+
     // Ordenación
     switch (sortFilter) {
       case "date_asc":
@@ -141,7 +173,7 @@ export function usePropertyExpensesFilters({ expenses, categories, subcategories
     }
 
     return filtered
-  }, [expenses, searchTerm, statusFilter, categoryFilter, subcategoryFilter, dateRangeFilter, sortFilter])
+  }, [expenses, searchTerm, statusFilter, categoryFilter, subcategoryFilter, dateRangeFilter, yearFilter, sortFilter])
 
   // Resumen calculado
   const summary = useMemo(() => {
@@ -160,6 +192,7 @@ export function usePropertyExpensesFilters({ expenses, categories, subcategories
     categoryFilter,
     subcategoryFilter,
     dateRangeFilter,
+    yearFilter,
     sortFilter,
     
     // Setters de filtros
@@ -168,11 +201,13 @@ export function usePropertyExpensesFilters({ expenses, categories, subcategories
     setCategoryFilter,
     setSubcategoryFilter,
     setDateRangeFilter,
+    setYearFilter,
     setSortFilter,
     
     // Datos calculados
     filteredExpenses,
     filteredSubcategoriesForFilter,
+    availableYears,
     summary,
   }
 }

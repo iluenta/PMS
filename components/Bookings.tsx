@@ -74,10 +74,37 @@ export default function Bookings() {
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("pending")
   const [sortFilter, setSortFilter] = useState<string>("checkin_asc")
   const [showOnlyCancelled, setShowOnlyCancelled] = useState(false)
+  const [yearFilter, setYearFilter] = useState<string>(new Date().getFullYear().toString())
 
   // Global property context
   const { selectedProperty } = useProperty()
   const { user, loading: authLoading } = useAuth()
+  
+  // Función para obtener años disponibles basados en datos existentes
+  const getAvailableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    const years = new Set<number>()
+    
+    // Años disponibles basados en las reservas existentes
+    bookings.forEach(b => {
+      if (b.check_in) {
+        years.add(new Date(b.check_in).getFullYear())
+      }
+    })
+    
+    // Siempre incluir el año actual
+    years.add(currentYear)
+    
+    // Ordenar de más reciente a más antiguo
+    return Array.from(years).sort((a, b) => b - a)
+  }, [bookings])
+
+  // Función para verificar si una fecha está en el año seleccionado
+  const isDateInYear = (date: string, year: string) => {
+    if (year === "all") return true
+    const dateYear = new Date(date).getFullYear().toString()
+    return dateYear === year
+  }
   
   // Debug: verificar que el contexto de autenticación funciona
   
@@ -163,6 +190,11 @@ export default function Bookings() {
       })
     }
 
+    // Year filter (basado en check_in)
+    if (yearFilter !== "all") {
+      filtered = filtered.filter((booking) => isDateInYear(booking.check_in, yearFilter))
+    }
+
     // Sort filter
     filtered.sort((a, b) => {
       switch (sortFilter) {
@@ -184,7 +216,7 @@ export default function Bookings() {
     })
 
     return filtered
-  }, [bookings, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter, selectedProperty])
+  }, [bookings, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter, selectedProperty, yearFilter])
 
   // Get unique channels for filter
   const availableChannels = useMemo(() => {
@@ -585,6 +617,94 @@ export default function Bookings() {
         </Dialog>
       </div>
 
+      {/* Tarjetas de Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Total Reservas */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Total Reservas</CardTitle>
+            <Calendar className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">{statistics.total}</div>
+            <p className="text-xs text-gray-500 mt-1">
+              {bookings.length} total{bookings.length !== statistics.total ? ` (${statistics.total} filtradas)` : ''}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Confirmadas */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Confirmadas</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">{statistics.confirmed}</div>
+            <p className="text-xs text-gray-500 mt-1">
+              {statistics.total > 0 ? Math.round((statistics.confirmed / statistics.total) * 100) : 0}% del total
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Canceladas */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Canceladas</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">{statistics.cancelled}</div>
+            <p className="text-xs text-gray-500 mt-1">
+              {statistics.total > 0 ? Math.round((statistics.cancelled / statistics.total) * 100) : 0}% del total
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Ingresos */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">{statistics.revenueLabel}</CardTitle>
+            <div className="flex items-center space-x-2">
+              <Badge 
+                variant={showOnlyCancelled ? "default" : "secondary"}
+                className={`cursor-pointer transition-colors ${
+                  showOnlyCancelled 
+                    ? "bg-red-500 hover:bg-red-600 text-white" 
+                    : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                }`}
+                onClick={() => setShowOnlyCancelled(!showOnlyCancelled)}
+              >
+                Canceladas
+              </Badge>
+              <TrendingUp className="h-4 w-4 text-green-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${statistics.revenueColor}`}>
+              €{statistics.revenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-gray-500">
+                Promedio: €{(() => {
+                  if (showOnlyCancelled) {
+                    // Para canceladas: ingresos de canceladas / número de canceladas
+                    return statistics.cancelled > 0 
+                      ? (statistics.revenue / statistics.cancelled).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
+                      : '0,00'
+                  } else {
+                    // Para ingresos normales: ingresos / (total - canceladas)
+                    return (statistics.total - statistics.cancelled) > 0 
+                      ? (statistics.revenue / (statistics.total - statistics.cancelled)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
+                      : '0,00'
+                  }
+                })()} por reserva
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filtros */}
       <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
@@ -593,6 +713,24 @@ export default function Bookings() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Año */}
+          <div className="space-y-2">
+            <Label htmlFor="year">Año</Label>
+            <Select value={yearFilter} onValueChange={setYearFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar año" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los años</SelectItem>
+                {getAvailableYears.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Buscar */}
           <div className="space-y-2">
             <Label htmlFor="search">Buscar</Label>
@@ -681,94 +819,6 @@ export default function Bookings() {
           </div>
         </div>
       </Card>
-
-      {/* Tarjetas de Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Reservas */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Reservas</CardTitle>
-            <Calendar className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{statistics.total}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {bookings.length} total{bookings.length !== statistics.total ? ` (${statistics.total} filtradas)` : ''}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Confirmadas */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Confirmadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{statistics.confirmed}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {statistics.total > 0 ? Math.round((statistics.confirmed / statistics.total) * 100) : 0}% del total
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Canceladas */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Canceladas</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{statistics.cancelled}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {statistics.total > 0 ? Math.round((statistics.cancelled / statistics.total) * 100) : 0}% del total
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Ingresos */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">{statistics.revenueLabel}</CardTitle>
-            <div className="flex items-center space-x-2">
-              <Badge 
-                variant={showOnlyCancelled ? "default" : "secondary"}
-                className={`cursor-pointer transition-colors ${
-                  showOnlyCancelled 
-                    ? "bg-red-500 hover:bg-red-600 text-white" 
-                    : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                }`}
-                onClick={() => setShowOnlyCancelled(!showOnlyCancelled)}
-              >
-                Canceladas
-              </Badge>
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${statistics.revenueColor}`}>
-              €{statistics.revenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
-            </div>
-            <div className="flex items-center justify-between mt-1">
-              <p className="text-xs text-gray-500">
-                Promedio: €{(() => {
-                  if (showOnlyCancelled) {
-                    // Para canceladas: ingresos de canceladas / número de canceladas
-                    return statistics.cancelled > 0 
-                      ? (statistics.revenue / statistics.cancelled).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
-                      : '0,00'
-                  } else {
-                    // Para ingresos normales: ingresos / (total - canceladas)
-                    return (statistics.total - statistics.cancelled) > 0 
-                      ? (statistics.revenue / (statistics.total - statistics.cancelled)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })
-                      : '0,00'
-                  }
-                })()} por reserva
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredBookings.map((booking) => {

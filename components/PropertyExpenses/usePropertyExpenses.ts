@@ -128,8 +128,10 @@ export function usePropertyExpenses() {
     categoryFilter: filters.categoryFilter,
     subcategoryFilter: filters.subcategoryFilter,
     dateRangeFilter: filters.dateRangeFilter,
+    yearFilter: filters.yearFilter,
     sortFilter: filters.sortFilter,
     filteredSubcategoriesForFilter: filters.filteredSubcategoriesForFilter,
+    availableYears: filters.availableYears,
     summary: filters.summary,
     
     // Estados de modal
@@ -151,6 +153,7 @@ export function usePropertyExpenses() {
     setSubcategoryFilter: filters.setSubcategoryFilter,
     setDateRangeFilter: filters.setDateRangeFilter,
     setSortFilter: filters.setSortFilter,
+    setYearFilter: filters.setYearFilter,
     
     // Setters de modal
     setIsDialogOpen: modal.setIsDialogOpen,

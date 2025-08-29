@@ -40,6 +40,7 @@ export default function Payments() {
   const [channelFilter, setChannelFilter] = useState<string>("all")
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
   const [sortFilter, setSortFilter] = useState<string>("date_desc")
+  const [yearFilter, setYearFilter] = useState<string>(new Date().getFullYear().toString())
 
   const { selectedProperty } = useProperty()
   const { user } = useAuth()
@@ -130,6 +131,22 @@ export default function Payments() {
       console.log("📊 Reservations found:", data?.length || 0)
       console.log("📋 Sample reservation:", data?.[0])
       
+      // Log detallado de todas las reservas para identificar duplicados
+      if (data && data.length > 0) {
+        console.log("🔍 Detalle de todas las reservas cargadas:")
+        data.forEach((reservation, index) => {
+          console.log(`  Reserva ${index + 1}:`)
+          console.log(`    ID: ${reservation.id}`)
+          console.log(`    Huésped: ${reservation.guest?.name}`)
+          console.log(`    Check-in: ${reservation.check_in}`)
+          console.log(`    Check-out: ${reservation.check_out}`)
+          console.log(`    Total: €${reservation.total_amount}`)
+          console.log(`    Status: ${reservation.status}`)
+          console.log(`    External Source: ${(reservation as any).external_source}`)
+          console.log(`    ---`)
+        })
+      }
+      
       setReservations(data || [])
     } catch (error) {
       console.error("❌ Error fetching reservations:", error)
@@ -209,17 +226,58 @@ export default function Payments() {
     // Usar calculateRequiredAmount en lugar de total_amount para obtener el importe real requerido
     const totalAmount = calculateRequiredAmount(reservation)
     
+    // Si el importe requerido es €0, considerar como pagado al 100%
+    let percentage = 0
+    if (totalAmount === 0) {
+      percentage = 100 // Reservas de €0 se consideran pagadas al 100%
+    } else {
+      percentage = (totalPaid / totalAmount) * 100
+    }
+    
     console.log(`💰 Reserva ${reservation.guest?.name}:`)
     console.log(`  - Pagos completados: ${reservationPayments.length}`)
     console.log(`  - Total pagado: €${totalPaid}`)
     console.log(`  - Total requerido: €${totalAmount}`)
-    console.log(`  - Porcentaje: ${totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0}%`)
+    console.log(`  - Porcentaje: ${percentage}%`)
     
     return { 
       totalPaid, 
       totalAmount, 
-      percentage: totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0 
+      percentage
     }
+  }
+
+  // Función para obtener años disponibles basados en datos existentes
+  const getAvailableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    const years = new Set<number>()
+    
+    // Años disponibles basados en las reservas existentes
+    reservations.forEach(r => {
+      if (r.check_in) {
+        years.add(new Date(r.check_in).getFullYear())
+      }
+    })
+    
+    // Años disponibles basados en los pagos existentes
+    payments.forEach(p => {
+      if (p.date) {
+        years.add(new Date(p.date).getFullYear())
+      }
+    })
+    
+    // Siempre incluir el año actual
+    years.add(currentYear)
+    
+    // Ordenar de más reciente a más antiguo
+    return Array.from(years).sort((a, b) => b - a)
+  }, [reservations, payments])
+
+  // Función para verificar si una fecha está en el año seleccionado
+  const isDateInYear = (date: string, year: string) => {
+    if (year === "all") return true
+    const dateYear = new Date(date).getFullYear().toString()
+    return dateYear === year
   }
 
   // Función para obtener reservas no pagadas al 100%
@@ -304,6 +362,11 @@ export default function Payments() {
       })
     }
 
+    // Filtro de año (aplicado a fecha de pago)
+    if (yearFilter !== "all") {
+      list = list.filter(p => isDateInYear(p.date, yearFilter))
+    }
+
     // Ordenar
     list.sort((a, b) => {
       switch (sortFilter) {
@@ -321,7 +384,118 @@ export default function Payments() {
     })
 
     return list
-  }, [payments, reservations, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter])
+  }, [payments, reservations, searchTerm, statusFilter, channelFilter, dateRangeFilter, sortFilter, yearFilter])
+
+  // Función para obtener reservas que coincidan con los filtros aplicados
+  const getFilteredReservations = useMemo(() => {
+    let list = [...reservations]
+
+    // Aplicar filtro de búsqueda a reservas
+    if (searchTerm.trim()) {
+      const s = searchTerm.toLowerCase().trim()
+      list = list.filter(r => {
+        const guest = r.guest?.name?.toLowerCase() || ""
+        const externalSource = (r as any).external_source?.toLowerCase() || ""
+        return guest.includes(s) || externalSource.includes(s)
+      })
+    }
+
+    // Aplicar filtro de canal a reservas
+    if (channelFilter !== "all") {
+      list = list.filter(r => {
+        const source = (r as any).external_source || "Direct"
+        const normalizedSource = source === "Direct" ? "Propio" : source
+        return normalizedSource === channelFilter
+      })
+    }
+
+    // Aplicar filtro de fecha a reservas (basado en check_in)
+    if (dateRangeFilter !== "all") {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      list = list.filter(r => {
+        const d = r.check_in ? new Date(r.check_in) : null
+        if (!d) return false
+        const daysDiff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        switch (dateRangeFilter) {
+          case "pending":
+            return d > today
+          case "today":
+            return daysDiff === 0
+          case "this_week":
+            return daysDiff >= 0 && daysDiff <= 7
+          case "this_month":
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          case "past":
+            return d < today
+          default:
+            return true
+        }
+      })
+    }
+
+    // Aplicar filtro de año a reservas (basado en check_in)
+    if (yearFilter !== "all") {
+      list = list.filter(r => isDateInYear(r.check_in, yearFilter))
+    }
+
+    return list
+  }, [reservations, searchTerm, channelFilter, dateRangeFilter, yearFilter])
+
+  // Calcular estadísticas basadas en los filtros aplicados
+  const paymentStatistics = useMemo(() => {
+    // 1. Importe total de pagos completados (ajustado a filtros)
+    const totalCompletedPayments = filteredPayments
+      .filter(p => p.status === 'completed')
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    // 2. Importe total de pagos pendientes + importe pendiente de reservas
+    const totalPendingPayments = filteredPayments
+      .filter(p => p.status === 'pending')
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    // Calcular importe pendiente de reservas filtradas
+    const totalPendingReservations = getFilteredReservations
+      .filter(r => r.property_id === selectedProperty?.id)
+      .reduce((sum, r) => {
+        const progress = getReservationPaymentProgress(r.id)
+        
+        // Usar el total_amount real de la reserva para el cálculo del pendiente
+        // calculateRequiredAmount puede incluir comisiones que no son relevantes aquí
+        const reservationTotal = r.total_amount || 0
+        const pendingAmount = Math.max(0, progress.totalAmount - progress.totalPaid)
+        
+        // Log de debug para identificar el problema
+        console.log(`🔍 Debug Reserva ${r.guest?.name}:`)
+        console.log(`  - total_amount de BD: €${r.total_amount}`)
+        console.log(`  - calculateRequiredAmount: €${progress.totalAmount}`)
+        console.log(`  - totalPaid: €${progress.totalPaid}`)
+        console.log(`  - pendingAmount calculado: €${pendingAmount}`)
+        
+        return sum + pendingAmount
+      }, 0)
+
+    const totalPendingAmount = Math.max(totalPendingPayments, totalPendingReservations)
+
+    // 3. Importe total de reservas confirmadas sin pago asociado
+    const totalConfirmedWithoutPayment = getFilteredReservations
+      .filter(r => r.property_id === selectedProperty?.id && r.status === 'confirmed')
+      .reduce((sum, r) => {
+        // Verificar si la reserva tiene algún pago asociado
+        const hasPayments = payments.some(p => p.reservation_id === r.id)
+        if (!hasPayments) {
+          const requiredAmount = calculateRequiredAmount(r)
+          return sum + requiredAmount
+        }
+        return sum
+      }, 0)
+
+    return {
+      totalCompletedPayments,
+      totalPendingAmount,
+      totalConfirmedWithoutPayment
+    }
+  }, [filteredPayments, getFilteredReservations, selectedProperty?.id, payments])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -390,7 +564,6 @@ export default function Payments() {
   }
 
   const handleAdd = () => {
-    console.log("➕ Opening new payment dialog")
     setEditingPayment(null)
     // Reset the form state
     setFormData({
@@ -449,12 +622,91 @@ export default function Payments() {
         </div>
       </div>
 
+      {/* Tarjetas de Estadísticas */}
+      {selectedProperty && (
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Estadísticas de Pagos</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Tarjeta 1: Pagos Completados */}
+            <Card className="p-4 border-l-4 border-l-green-500">
+              <CardContent className="p-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Pagos Completados</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      €{paymentStatistics.totalCompletedPayments.toFixed(2)}
+                    </p>
+                  </div>
+                  <CheckCircle className="h-8 w-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tarjeta 2: Pagos Pendientes */}
+            <Card className="p-4 border-l-4 border-l-yellow-500">
+              <CardContent className="p-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Pagos Pendientes</p>
+                    <p className="text-2xl font-bold text-yellow-600">
+                      €{paymentStatistics.totalPendingAmount.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Incluye pagos pendientes + importe pendiente de reservas
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-yellow-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tarjeta 3: Reservas Confirmadas Sin Pago */}
+            <Card className="p-4 border-l-4 border-l-blue-500">
+              <CardContent className="p-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Reservas Sin Pago</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      €{paymentStatistics.totalConfirmedWithoutPayment.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Reservas confirmadas sin pago asociado
+                    </p>
+                  </div>
+                  <AlertCircle className="h-8 w-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </Card>
+      )}
+
       {/* Filtros */}
       <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Año */}
+          <div className="space-y-2">
+            <Label htmlFor="year">Año</Label>
+            <Select value={yearFilter} onValueChange={setYearFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar año" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los años</SelectItem>
+                {getAvailableYears.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Buscar */}
           <div className="space-y-2">
             <Label htmlFor="search">Buscar</Label>
@@ -558,7 +810,6 @@ export default function Payments() {
                 updateReservationPaymentStatus={updateReservationPaymentStatus}
                 payments={payments}
                 onClose={() => {
-                  console.log("🚪 Closing dialog and clearing state")
                   setShowPaymentDialog(false)
                   setEditingPayment(null)
                 }}
@@ -713,11 +964,10 @@ function PaymentDialog({
   const { user } = useAuth()
   // Estado para controlar si mostrar todas las reservas o solo las pendientes
   const [showAllReservations, setShowAllReservations] = useState(false)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [isInitialLoad, setIsInitialLoad] = useState(false)
 
   // Función para manejar el cambio del checkbox
   const handleCheckboxChange = (checked: boolean) => {
-    console.log("✅ Checkbox cambiado:", checked)
     setShowAllReservations(checked)
     setIsInitialLoad(false)
   }
@@ -726,51 +976,44 @@ function PaymentDialog({
   const getUnpaidReservations = () => {
     if (!user?.tenant_id) return []
     
-    console.log("🔍 Buscando reservas no pagadas para propiedad:", propertyId)
-    console.log("📊 Total de reservas disponibles:", reservations.length)
-    
     const unpaid = reservations.filter(reservation => {
       // Asegurar que la reserva pertenece a la propiedad seleccionada
       if (reservation.property_id !== propertyId) {
-        console.log(`❌ Reserva ${reservation.id} no pertenece a la propiedad ${propertyId}`)
         return false
       }
       
       // Calcular el progreso de pagos para esta reserva
       const { totalPaid, totalAmount, percentage } = getReservationPaymentProgress(reservation.id)
       
-      console.log(`📋 Reserva ${reservation.guest?.name}: totalPaid=${totalPaid}, totalAmount=${totalAmount}, percentage=${percentage}%`)
-      
       // Incluir reservas que no estén pagadas al 100%
       const isUnpaid = percentage < 100
-      if (isUnpaid) {
-        console.log(`✅ Reserva NO pagada: ${reservation.guest?.name} - ${percentage.toFixed(1)}% pagado`)
-      } else {
-        console.log(`❌ Reserva pagada al 100%: ${reservation.guest?.name} - ${percentage.toFixed(1)}% pagado`)
-      }
       
       return isUnpaid
     })
     
-    console.log(`📊 Reservas no pagadas encontradas: ${unpaid.length}`)
     return unpaid
   }
 
   // Función para obtener todas las reservas que deben aparecer en el Select
   const allReservationsForSelect = useMemo(() => {
-    console.log("🔄 Recalculando reservas para mostrar. showAllReservations:", showAllReservations, "isInitialLoad:", isInitialLoad)
-    
-    // Si es la carga inicial o no se muestran todas las reservas, mostrar solo las no pagadas
-    if (isInitialLoad || !showAllReservations) {
+    // Si no se muestran todas las reservas, mostrar solo las no pagadas
+    if (!showAllReservations) {
       const unpaidReservations = getUnpaidReservations()
-      console.log("📋 Primera carga - Mostrando solo reservas no pagadas:", unpaidReservations.length)
+      
+      // Si estamos editando un pago, asegurar que la reserva asociada esté en la lista
+      if (payment?.reservation_id) {
+        const associatedReservation = reservations.find(r => r.id === payment.reservation_id)
+        if (associatedReservation && !unpaidReservations.some(r => r.id === payment.reservation_id)) {
+          unpaidReservations.push(associatedReservation)
+        }
+      }
+      
       return unpaidReservations
     }
     
     // Mostrar todas las reservas si el checkbox está marcado
-    console.log("📋 Mostrando TODAS las reservas:", reservations.length)
     return reservations.filter(r => r.property_id === propertyId)
-  }, [showAllReservations, propertyId, reservations, isInitialLoad])
+  }, [showAllReservations, propertyId, reservations, payment?.reservation_id])
 
   // Función para manejar cambios en el formulario
   const handleInputChange = (field: string, value: string | number) => {
@@ -792,10 +1035,47 @@ function PaymentDialog({
     }
   }
 
+  // Función para calcular la fecha de pago sugerida
+  const calculateSuggestedPaymentDate = (reservationId: string | null): string => {
+    if (!reservationId || reservationId === "no_reservation") {
+      // Si no hay reserva específica, usar fecha actual
+      return new Date().toISOString().split("T")[0]
+    }
+
+    const reservation = reservations.find(r => r.id === reservationId)
+    if (!reservation) {
+      return new Date().toISOString().split("T")[0]
+    }
+
+    // Determinar si es canal propio
+    const isPropioChannel = () => {
+      const channelName = reservation.property_channel?.channel?.name || reservation.external_source || "Propio"
+      const propioChannels = ['Propio', 'Direct', 'Direct Booking', 'Canal Directo', 'Directo']
+      return propioChannels.some(name => 
+        channelName.toLowerCase().includes(name.toLowerCase())
+      )
+    }
+
+    if (isPropioChannel()) {
+      // Para canal propio: fecha actual
+      return new Date().toISOString().split("T")[0]
+    } else {
+      // Para canales externos: siguiente jueves después del check-out
+      const checkOutDate = new Date(reservation.check_out)
+      const suggestedDate = new Date(checkOutDate)
+      
+      // Encontrar el siguiente jueves (día 4 de la semana, 0=Domingo, 4=Jueves)
+      while (suggestedDate.getDay() !== 4) {
+        suggestedDate.setDate(suggestedDate.getDate() + 1)
+      }
+      
+      return suggestedDate.toISOString().split("T")[0]
+    }
+  }
+
   // Reset form when the payment prop changes
   useEffect(() => {
     if (payment) {
-      console.log("📝 Loading payment data for editing:", payment)
       onFormDataChange({
         reservation_id: payment.reservation_id || "",
         customer_name: payment.customer_name || "",
@@ -809,7 +1089,6 @@ function PaymentDialog({
       })
     } else {
       // Reset form for new payment
-      console.log("🆕 Resetting form for new payment")
       onFormDataChange({
         reservation_id: "",
         customer_name: "",
@@ -824,8 +1103,18 @@ function PaymentDialog({
     }
     // Reset UI states
     setShowAllReservations(false)
-    setIsInitialLoad(true)
   }, [payment]) // Only depend on payment prop
+
+  // Actualizar fecha cuando cambie la reserva seleccionada
+  useEffect(() => {
+    if (formData.reservation_id && formData.reservation_id !== "no_reservation") {
+      const suggestedDate = calculateSuggestedPaymentDate(formData.reservation_id)
+      onFormDataChange(prev => ({
+        ...prev,
+        date: suggestedDate
+      }))
+    }
+  }, [formData.reservation_id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -923,11 +1212,6 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
   useEffect(() => {
     if (selectedReservation && reservationAmounts) {
       const calculatedAmount = Math.max(0, reservationAmounts.finalAmount - totalCompletedPaidForSelected)
-      console.log("💰 Actualizando importe automáticamente:", {
-        finalAmount: reservationAmounts.finalAmount,
-        totalCompletedPaid: totalCompletedPaidForSelected,
-        calculatedAmount: calculatedAmount
-      })
       
       onFormDataChange(prev => ({
         ...prev,
@@ -963,14 +1247,11 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                  {/* Reserva como primer campo */}
          <div className="space-y-2">
            <Label htmlFor="reservation_id">Reserva *</Label>
-           <Select
-             value={formData.reservation_id}
-             onValueChange={(value) => {
-               console.log("🔽 Selected reservation:", value)
-               handleReservationChange(value)
-             }}
-             disabled={!propertyId}
-           >
+                       <Select
+              value={formData.reservation_id}
+              onValueChange={handleReservationChange}
+              disabled={!propertyId}
+            >
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar reserva" />
             </SelectTrigger>

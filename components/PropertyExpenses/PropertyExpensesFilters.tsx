@@ -13,12 +13,15 @@ interface PropertyExpensesFiltersProps {
   setSubcategoryFilter: (value: string) => void
   dateRangeFilter: string
   setDateRangeFilter: (value: string) => void
+  yearFilter: string
+  setYearFilter: (value: string) => void
   sortFilter: string
   setSortFilter: (value: string) => void
   categories: Array<{ id: string; description: string }>
   subcategories: Array<{ id: string; description: string; category_id: string }>
   filteredSubcategoriesForFilter: Array<{ id: string; description: string; category_id: string }>
   loadingCategories: boolean
+  availableYears: number[]
 }
 
 export default function PropertyExpensesFilters({
@@ -32,12 +35,15 @@ export default function PropertyExpensesFilters({
   setSubcategoryFilter,
   dateRangeFilter,
   setDateRangeFilter,
+  yearFilter,
+  setYearFilter,
   sortFilter,
   setSortFilter,
   categories,
   subcategories,
   filteredSubcategoriesForFilter,
   loadingCategories,
+  availableYears,
 }: PropertyExpensesFiltersProps) {
   return (
     <div className="space-y-4">
@@ -116,6 +122,21 @@ export default function PropertyExpensesFilters({
           </SelectContent>
         </Select>
 
+        {/* Filtro de año */}
+        <Select value={yearFilter} onValueChange={setYearFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Año" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los años</SelectItem>
+            {availableYears.map((year) => (
+              <SelectItem key={year} value={year.toString()}>
+                {year}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Ordenamiento */}
         <Select value={sortFilter} onValueChange={setSortFilter}>
           <SelectTrigger>
@@ -133,7 +154,7 @@ export default function PropertyExpensesFilters({
       </div>
 
       {/* Indicador de filtros activos */}
-      {(searchTerm || statusFilter !== "all" || categoryFilter !== "all" || subcategoryFilter !== "all" || dateRangeFilter !== "all") && (
+      {(searchTerm || statusFilter !== "all" || categoryFilter !== "all" || subcategoryFilter !== "all" || dateRangeFilter !== "all" || yearFilter !== "all") && (
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Filter className="h-4 w-4" />
           <span>Filtros activos:</span>
@@ -160,6 +181,11 @@ export default function PropertyExpensesFilters({
           {dateRangeFilter !== "all" && (
             <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md">
               Fecha: {dateRangeFilter === "today" ? "Hoy" : dateRangeFilter === "week" ? "Última semana" : dateRangeFilter === "month" ? "Este mes" : dateRangeFilter === "quarter" ? "Este trimestre" : "Este año"}
+            </span>
+          )}
+          {yearFilter !== "all" && (
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md">
+              Año: {yearFilter}
             </span>
           )}
         </div>

@@ -56,6 +56,8 @@ export function PropertyExpensesContent() {
     sortFilter,
     filteredSubcategoriesForFilter,
     loadingCategories,
+    yearFilter,
+    availableYears,
     
     // Setters
     setIsDialogOpen,
@@ -69,6 +71,7 @@ export function PropertyExpensesContent() {
     setSubcategoryFilter,
     setDateRangeFilter,
     setSortFilter,
+    setYearFilter,
     
     // Funciones
     handleCreateExpense,
@@ -146,12 +149,15 @@ export function PropertyExpensesContent() {
             setSubcategoryFilter={setSubcategoryFilter}
             dateRangeFilter={dateRangeFilter}
             setDateRangeFilter={setDateRangeFilter}
+            yearFilter={yearFilter}
+            setYearFilter={setYearFilter}
             sortFilter={sortFilter}
             setSortFilter={setSortFilter}
             categories={categories}
             subcategories={subcategories}
             filteredSubcategoriesForFilter={filteredSubcategoriesForFilter}
             loadingCategories={loadingCategories}
+            availableYears={availableYears}
           />
         </CardContent>
       </Card>
