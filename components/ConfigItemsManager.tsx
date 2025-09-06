@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { updateSetting } from "@/lib/settings"
-import type { Setting, ConfigType, ColoredListItem } from "@/types/settings"
+import type { Setting, ConfigType, ColoredListItem, ConfigValue } from "@/types/settings"
 import { Plus, Edit, Trash2, Save, X, Palette, Eye, Info } from "lucide-react"
 
 interface ConfigItemsManagerProps {

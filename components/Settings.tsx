@@ -288,7 +288,7 @@ export default function Settings() {
       setLogoPreview(channel.logo)
     }
     // Preload associated person if present: we don't know the name, so keep personId and lazy fetch name
-    setChannelPerson({ name: '', personId: channel.person_id })
+    setChannelPerson({ name: '', personId: channel.person_id || undefined })
     setIsDialogOpen(true)
   }
 

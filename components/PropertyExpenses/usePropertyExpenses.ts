@@ -63,13 +63,13 @@ export function usePropertyExpenses() {
         amount: modal.formData.amount,
         date: modal.formData.date,
         category_id: modal.formData.category,
-        subcategory_id: modal.formData.subcategory === "none" ? null : modal.formData.subcategory,
+        subcategory_id: modal.formData.subcategory === "none" ? undefined : modal.formData.subcategory,
         payment_method: modal.formData.payment_method,
         status: modal.formData.status,
         notes: modal.formData.notes,
-        reservation_id: modal.formData.reservation_id === "none" ? null : modal.formData.reservation_id,
+        reservation_id: modal.formData.reservation_id === "none" ? undefined : modal.formData.reservation_id,
         vendor: modal.formData.vendor,
-        vendor_id: modal.formData.vendor_id || null,
+        vendor_id: modal.formData.vendor_id || undefined,
         is_recurring: modal.formData.is_recurring
       }
 

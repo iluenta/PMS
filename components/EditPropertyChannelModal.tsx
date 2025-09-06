@@ -445,7 +445,7 @@ export default function EditPropertyChannelModal({
           </div>
 
           {/* Stats actuales */}
-          {propertyChannel && (propertyChannel.property_rating > 0 || propertyChannel.property_review_count > 0) && (
+          {propertyChannel && ((propertyChannel.property_rating || 0) > 0 || (propertyChannel.property_review_count || 0) > 0) && (
             <div className="space-y-2">
               <h4 className="font-medium flex items-center gap-2">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />

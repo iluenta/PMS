@@ -1342,7 +1342,7 @@ function BookingDialog({
         onClose()
       }
     } catch (error) {
-      alert(`Error al guardar la reserva: ${error.message}`)
+      alert(`Error al guardar la reserva: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     }
   }
 

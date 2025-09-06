@@ -26,6 +26,7 @@ import {
   LogOut,
   Globe,
   User,
+  FileText,
 } from "lucide-react"
 import {
   DropdownMenu,

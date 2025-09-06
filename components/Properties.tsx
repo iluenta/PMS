@@ -227,10 +227,9 @@ export default function Properties() {
                   <Edit className="h-4 w-4 mr-1" />
                   Editar
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => window.open(`/guide/${property.id}`, "_blank")} className="border-blue-600 text-blue-600 hover:bg-blue-50">
-                  <BookOpen className="h-4 w-4 mr-1" />
-                  Guía
-                </Button>
+                <div className="flex gap-1">
+                  {/* Botones de guía eliminados */}
+                </div>
               </div>
 
               {property.amenities && property.amenities.length > 0 && (
@@ -311,6 +310,7 @@ function PropertyDialog({
     max_stay: 30,
     is_active: true,
     images: [] as string[],
+    cover_image: "",
     amenities: [] as string[],
     status: "active",
   })
@@ -366,6 +366,7 @@ function PropertyDialog({
         max_stay: stableProperty.max_stay || 30,
         is_active: stableProperty.is_active !== undefined ? stableProperty.is_active : true,
         images: stableProperty.images || [],
+        cover_image: stableProperty.cover_image || "",
         amenities: stableProperty.amenities || [],
         status: stableProperty.status || "active",
       }
@@ -409,6 +410,7 @@ function PropertyDialog({
         max_stay: 30,
         is_active: true,
         images: [],
+        cover_image: "",
         amenities: [],
         status: "active",
       })
@@ -481,7 +483,7 @@ function PropertyDialog({
       if (error instanceof Error) {
         errorMessage = error.message
       } else if (typeof error === 'object' && error !== null) {
-        errorMessage = error.message || JSON.stringify(error)
+        errorMessage = error instanceof Error ? error.message : JSON.stringify(error)
       }
       
       toast({

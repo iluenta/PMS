@@ -2,27 +2,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Edit, Trash2, Receipt, Building2, Calendar, Euro, RefreshCw } from "lucide-react"
-import type { Expense } from "@/lib/supabase"
-
-// Tipo extendido para gastos con joins - debe coincidir exactamente con usePropertyExpensesData
-interface ExpenseWithJoins extends Expense {
-  categories?: { description: string }
-  subcategories?: { description: string }
-  reservations?: {
-    id: string
-    guest: any
-    check_in: string
-    check_out: string
-    property_id: string
-  }
-}
+import type { ExpenseWithJoinsFromDB } from '@/types/expenses'
 
 interface PropertyExpensesCardsProps {
-  expenses: ExpenseWithJoins[]
+  expenses: ExpenseWithJoinsFromDB[]
   loading: boolean
-  onEdit: (expense: ExpenseWithJoins) => void
-  onDelete: (expense: ExpenseWithJoins) => void
-  onCreateRecurrence: (expense: ExpenseWithJoins) => void
+  onEdit: (expense: ExpenseWithJoinsFromDB) => void
+  onDelete: (expense: ExpenseWithJoinsFromDB) => void
+  onCreateRecurrence: (expense: ExpenseWithJoinsFromDB) => void
 }
 
 export default function PropertyExpensesCards({ 

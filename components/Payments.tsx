@@ -952,7 +952,27 @@ function PaymentDialog({
     reference: string
     notes: string
     fee: string
-  }) => void
+  } | ((prev: {
+    reservation_id: string
+    customer_name: string
+    amount: string
+    method: string
+    status: string
+    date: string
+    reference: string
+    notes: string
+    fee: string
+  }) => {
+    reservation_id: string
+    customer_name: string
+    amount: string
+    method: string
+    status: string
+    date: string
+    reference: string
+    notes: string
+    fee: string
+  })) => void
   propertyId: string
   reservations: Reservation[]
   getReservationPaymentProgress: (reservationId: string) => { totalPaid: number; totalAmount: number; percentage: number }

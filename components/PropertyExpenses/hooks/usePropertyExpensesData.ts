@@ -1,22 +1,9 @@
 import { useState, useEffect } from "react"
 import { supabase, type Expense, type Property, type Reservation } from "@/lib/supabase"
 import { getExpenseCategories, getExpenseSubcategories } from "@/lib/expenses"
-import { type ExpenseCategory, type ExpenseSubcategory } from "@/types/expenses"
+import { type ExpenseCategory, type ExpenseSubcategory, type ExpenseWithJoins } from "@/types/expenses"
 import { useProperty } from "@/contexts/PropertyContext"
 import { useToast } from "@/hooks/use-toast"
-
-// Tipo extendido para gastos con joins
-interface ExpenseWithJoins extends Expense {
-  categories?: { description: string }
-  subcategories?: { description: string }
-  reservations?: {
-    id: string
-    guest: any
-    check_in: string
-    check_out: string
-    property_id: string
-  }
-}
 
 export function usePropertyExpensesData() {
   const { selectedProperty } = useProperty()

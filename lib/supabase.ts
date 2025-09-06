@@ -128,15 +128,16 @@ const supabaseClient = getSupabaseClient()
 // ============================================================================
 
 // Only run heartbeat on the server side
-if (typeof window === 'undefined') {
-  setInterval(async () => {
-    try {
-      await checkConnectionHealth(supabaseClient)
-    } catch (error) {
-      // Silent heartbeat check to avoid exposing system details
-    }
-  }, 10 * 60 * 1000) // Every 10 minutes (less aggressive)
-}
+// TEMPORARILY DISABLED - causing connection issues
+// if (typeof window === 'undefined') {
+//   setInterval(async () => {
+//     try {
+//       await checkConnectionHealth(supabaseClient)
+//     } catch (error) {
+//       // Silent heartbeat check to avoid exposing system details
+//     }
+//   }, 10 * 60 * 1000) // Every 10 minutes (less aggressive)
+// }
 
 // ============================================================================
 // Export function to get healthy client
@@ -180,6 +181,7 @@ export interface Property {
   bedrooms: number
   bathrooms: number
   capacity: number
+  max_guests: number
   area: number
   base_price: number
   cleaning_fee: number
@@ -190,6 +192,7 @@ export interface Property {
   max_stay: number
   is_active: boolean
   images: string[]
+  cover_image?: string
   amenities: string[]
   status: string
   channel_ratings?: any
@@ -381,34 +384,6 @@ export interface Expense {
   subcategory_id?: string
   property?: Property
   reservation?: Reservation
-}
-
-export interface TravelerGuideSection {
-  id: string
-  property_id: string
-  section_type: string
-  title: string
-  content?: string
-  order_index: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  items?: TravelerGuideItem[]
-}
-
-export interface TravelerGuideItem {
-  id: string
-  section_id: string
-  title: string
-  description?: string
-  address?: string
-  phone?: string
-  website?: string
-  image_url?: string
-  order_index: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
 }
 
 export interface AvailabilitySetting {

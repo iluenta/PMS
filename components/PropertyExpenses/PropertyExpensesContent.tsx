@@ -172,7 +172,7 @@ export function PropertyExpensesContent() {
         </CardHeader>
         <CardContent>
           <PropertyExpensesCards
-            expenses={expenses}
+            expenses={expenses as any}
             loading={loading}
             onEdit={handleEditExpense}
             onDelete={handleDeleteExpense}

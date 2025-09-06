@@ -1,3 +1,27 @@
+// Tipos para gastos de propiedades
+
+import type { Expense, Reservation } from '@/lib/supabase'
+
+// Tipo base para gastos con joins (sin campos adicionales requeridos)
+export interface ExpenseWithJoins extends Expense {
+  categories?: { description: string }
+  subcategories?: { description: string }
+  reservations?: {
+    id: string
+    guest: any
+    check_in: string
+    check_out: string
+    property_id: string
+  }
+  people?: { name: string }
+}
+
+// Tipo específico para datos de la base de datos (con campos adicionales)
+export interface ExpenseWithJoinsFromDB extends ExpenseWithJoins {
+  created_at: string
+  updated_at: string
+}
+
 // Tipos para categorías de gastos
 export interface ExpenseCategory {
   id: string
@@ -6,7 +30,6 @@ export interface ExpenseCategory {
   updated_at: string
 }
 
-// Tipos para subcategorías de gastos
 export interface ExpenseSubcategory {
   id: string
   category_id: string
@@ -15,18 +38,16 @@ export interface ExpenseSubcategory {
   updated_at: string
 }
 
-// Tipos para mostrar subcategorías con información de la categoría
 export interface ExpenseSubcategoryWithCategory extends ExpenseSubcategory {
-  category?: ExpenseCategory
+  category: ExpenseCategory
 }
 
-// DTOs para operaciones CRUD
 export interface CreateExpenseCategoryData {
   description: string
 }
 
 export interface UpdateExpenseCategoryData {
-  description: string
+  description?: string
 }
 
 export interface CreateExpenseSubcategoryData {
@@ -36,5 +57,8 @@ export interface CreateExpenseSubcategoryData {
 
 export interface UpdateExpenseSubcategoryData {
   category_id?: string
-  description: string
+  description?: string
 }
+
+// Re-exportar tipos desde supabase para compatibilidad
+export type { Expense, Reservation } from '@/lib/supabase'

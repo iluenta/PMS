@@ -80,7 +80,7 @@ export async function createExpenseCategory(categoryData: CreateExpenseCategoryD
     // Mock creation
     const newCategory: ExpenseCategory = {
       id: Math.random().toString(36).substr(2, 9),
-      description: categoryData.description,
+      description: categoryData.description || "",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -106,7 +106,7 @@ export async function updateExpenseCategory(id: string, categoryData: UpdateExpe
     // Mock update
     return {
       id,
-      description: categoryData.description,
+      description: categoryData.description || "",
       created_at: "2024-01-01T00:00:00Z",
       updated_at: new Date().toISOString()
     }
@@ -252,7 +252,7 @@ export async function createExpenseSubcategory(subcategoryData: CreateExpenseSub
     const newSubcategory: ExpenseSubcategory = {
       id: Math.random().toString(36).substr(2, 9),
       category_id: subcategoryData.category_id,
-      description: subcategoryData.description,
+      description: subcategoryData.description || "",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -279,7 +279,7 @@ export async function updateExpenseSubcategory(id: string, subcategoryData: Upda
     return {
       id,
       category_id: subcategoryData.category_id || "1",
-      description: subcategoryData.description,
+      description: subcategoryData.description || "",
       created_at: "2024-01-01T00:00:00Z",
       updated_at: new Date().toISOString()
     }
