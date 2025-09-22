@@ -45,6 +45,7 @@ const navigation = [
   { name: "Pagos de Reservas", href: "/booking-payments", icon: CreditCard },
   { name: "Gastos de Propiedades", href: "/property-expenses", icon: Receipt },
   { name: "Personas", href: "/people", icon: Users },
+  { name: "Guías del Huésped", href: "/guides", icon: FileText },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Configuración", href: "/settings", icon: Settings },
 ]

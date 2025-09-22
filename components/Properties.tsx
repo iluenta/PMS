@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ImageSelector } from "@/components/ui/ImageSelector"
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase, type Property } from "@/lib/supabase"
 import { Building2, Plus, Edit, MapPin, Users, Bed, Bath, Camera, X, Star, BookOpen, CalendarCheck, Globe } from "lucide-react"
+import Link from "next/link"
 import PropertyChannels from "./PropertyChannels"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
@@ -228,7 +230,18 @@ export default function Properties() {
                   Editar
                 </Button>
                 <div className="flex gap-1">
-                  {/* Botones de guía eliminados */}
+                  <Button asChild variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
+                    <Link href={`/properties/${property.id}/guide`}>
+                      <BookOpen className="h-4 w-4 mr-1" />
+                      Guía
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="border-purple-600 text-purple-600 hover:bg-purple-50">
+                    <Link href={`/properties/${property.id}/guide/public`}>
+                      <Globe className="h-4 w-4 mr-1" />
+                      Ver
+                    </Link>
+                  </Button>
                 </div>
               </div>
 
@@ -324,7 +337,6 @@ function PropertyDialog({
     check_out_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
   })
 
-  const [newImageUrl, setNewImageUrl] = useState("")
   const [newAmenity, setNewAmenity] = useState("")
 
   const weekDays = [
@@ -494,15 +506,6 @@ function PropertyDialog({
     }
   }
 
-  const addImage = () => {
-    if (newImageUrl.trim()) {
-      setFormData({
-        ...formData,
-        images: [...formData.images, newImageUrl.trim()],
-      })
-      setNewImageUrl("")
-    }
-  }
 
   const removeImage = (index: number) => {
     const newImages = formData.images.filter((_, i) => i !== index)
@@ -706,20 +709,8 @@ function PropertyDialog({
           <TabsContent value="images" className="space-y-4">
             <h3 className="text-lg font-medium">Fotografías</h3>
 
-            <div className="flex space-x-2">
-              <Input
-                placeholder="URL de la imagen"
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addImage())}
-              />
-              <Button type="button" onClick={addImage}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {formData.images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {formData.images.map((image, index) => (
                   <div key={index} className="relative group">
                     <img
@@ -747,7 +738,36 @@ function PropertyDialog({
                   </div>
                 ))}
               </div>
-            )}
+
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <div className="text-center">
+                  <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">Agregar Nueva Imagen</h4>
+                  <p className="text-gray-500 mb-4">Sube una imagen o elige una existente</p>
+                  
+                  <ImageSelector
+                    value=""
+                    onChange={(url) => {
+                      if (url && !formData.images.includes(url)) {
+                        setFormData({
+                          ...formData,
+                          images: [...formData.images, url]
+                        })
+                      }
+                    }}
+                    onError={(error) => {
+                      toast({
+                        title: "Error",
+                        description: error,
+                        variant: "destructive"
+                      })
+                    }}
+                    label="Seleccionar imagen"
+                    className="max-w-md mx-auto"
+                  />
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="amenities" className="space-y-4">
