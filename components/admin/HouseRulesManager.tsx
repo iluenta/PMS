@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { IconSelector } from "@/components/ui/IconSelector"
+import { CompleteIconSelector } from "@/components/ui/CompleteIconSelector"
 import { HouseRule } from "@/types/guides"
 import { getHouseRules, createHouseRule, updateHouseRule, deleteHouseRule } from "@/lib/guides"
 
@@ -193,11 +193,9 @@ export function HouseRulesManager({ guideId }: HouseRulesManagerProps) {
                     placeholder="Título de la norma"
                   />
                 </div>
-                <IconSelector
+                <CompleteIconSelector
                   value={editingRule.icon}
                   onChange={(icon) => setEditingRule({ ...editingRule, icon })}
-                  category="general"
-                  label="Icono"
                 />
               </div>
 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { IconSelector } from "@/components/ui/IconSelector"
+import { CompleteIconSelector } from "@/components/ui/CompleteIconSelector"
 import { Tip } from "@/types/guides"
 import { getTips, createTip, updateTip, deleteTip } from "@/lib/guides"
 
@@ -203,11 +203,9 @@ export function TipsManager({ guideId }: TipsManagerProps) {
                     placeholder="Título del consejo"
                   />
                 </div>
-                <IconSelector
+                <CompleteIconSelector
                   value={editingTip.icon}
                   onChange={(icon) => setEditingTip({ ...editingTip, icon })}
-                  category="general"
-                  label="Icono"
                 />
               </div>
 

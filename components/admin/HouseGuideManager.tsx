@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { IconSelector } from "@/components/ui/IconSelector"
+import { CompleteIconSelector } from "@/components/ui/CompleteIconSelector"
 import { HouseGuideItem } from "@/types/guides"
 import { getHouseGuideItems, createHouseGuideItem, updateHouseGuideItem, deleteHouseGuideItem } from "@/lib/guides"
 
@@ -203,11 +203,9 @@ export function HouseGuideManager({ guideId }: HouseGuideManagerProps) {
                     placeholder="Título del elemento"
                   />
                 </div>
-                <IconSelector
+                <CompleteIconSelector
                   value={editingItem.icon}
                   onChange={(icon) => setEditingItem({ ...editingItem, icon })}
-                  category="general"
-                  label="Icono"
                 />
               </div>
 
