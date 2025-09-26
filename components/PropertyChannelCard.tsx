@@ -20,22 +20,29 @@ export default function PropertyChannelCard({
   onDelete,
   onToggleStatus,
 }: PropertyChannelCardProps) {
+  // Debug log
+  console.log('PropertyChannelCard - propertyChannel:', {
+    id: propertyChannel.id,
+    channelName: propertyChannel.channel?.name,
+    apply_vat: propertyChannel.apply_vat,
+    vat_percent: propertyChannel.vat_percent,
+    channel: propertyChannel.channel
+  })
   const channel = propertyChannel.channel
 
   if (!channel) {
     return null
   }
 
-  // Helper para truncar URLs
   const truncateUrl = (url: string, maxLength: number = 40) => {
     if (!url) return ""
     return url.length > maxLength ? `${url.substring(0, maxLength)}...` : url
   }
 
-  // Helper para formatear comisiones
-  const formatCommission = (value?: number) => {
-    if (!value || value === 0) return "0%"
-    return `${value}%`
+  // Helper para formatear comisiones y porcentajes
+  const formatCommission = (value?: number | null) => {
+    if (value === undefined || value === null) return "0%"
+    return `${value.toFixed(2)}%`
   }
 
   return (
@@ -99,10 +106,10 @@ export default function PropertyChannelCard({
         <div className="space-y-3 mb-4">
           {/* Sync y Rating */}
           <div className="flex items-center justify-between text-sm">
-                         <div className="flex items-center gap-1 text-gray-600">
-               <RefreshCw className={`h-4 w-4 ${propertyChannel.sync_enabled ? 'text-green-600' : 'text-gray-400'}`} />
-               <span>Sync: {propertyChannel.sync_enabled ? "✅" : "❌"}</span>
-             </div>
+            <div className="flex items-center gap-1 text-gray-600">
+              <RefreshCw className={`h-4 w-4 ${propertyChannel.sync_enabled ? 'text-green-600' : 'text-gray-400'}`} />
+              <span>Sync: {propertyChannel.sync_enabled ? "✅" : "❌"}</span>
+            </div>
             
             <div className="flex items-center gap-1 text-gray-600">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -117,22 +124,30 @@ export default function PropertyChannelCard({
 
           {/* Comisiones destacadas */}
           <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs font-medium text-gray-500 mb-2">COMISIONES</div>
-            <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-gray-500 mb-2">COMISIONES E IMPUESTOS</div>
+            <div className="grid grid-cols-3 gap-2">
               <div className="text-center">
                 <div className="text-sm font-semibold text-red-600">
                   {formatCommission(propertyChannel.commission_override_charge)} cobro
                 </div>
               </div>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <div className="text-center">
+              <div className="text-center border-x border-gray-200">
                 <div className="text-sm font-semibold text-red-600">
                   {formatCommission(propertyChannel.commission_override_sale)} venta
                 </div>
               </div>
+              <div className="text-center">
+                <div className={`text-sm font-semibold ${propertyChannel.apply_vat ? 'text-green-600' : 'text-gray-400'}`}>
+                  {propertyChannel.apply_vat 
+                    ? `${propertyChannel.vat_percent !== undefined ? propertyChannel.vat_percent : 21}%` 
+                    : '0%'}
+                </div>
+                <div className={`text-xs mt-1 ${propertyChannel.apply_vat ? 'text-green-600' : 'text-gray-500'}`}>
+                  {propertyChannel.apply_vat ? 'IVA' : 'Sin IVA'}
+                </div>
+              </div>
             </div>
           </div>
-
           {/* URL principal */}
           {propertyChannel.listing_url && (
             <div className="flex items-center justify-between text-sm">

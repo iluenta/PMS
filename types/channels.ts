@@ -29,11 +29,13 @@ export interface PropertyChannel {
   commission_override_sale?: number
   availability_sync_enabled: boolean
   instant_booking_enabled: boolean
+  // IVA por canal y propiedad
+  apply_vat?: boolean
+  vat_percent?: number
   created_at: string
   updated_at: string
 }
 
-// DTOs para operaciones CRUD
 export interface CreateChannelData {
   name: string
   logo?: string
@@ -62,6 +64,9 @@ export interface CreatePropertyChannelData {
   commission_override_sale?: number
   availability_sync_enabled?: boolean
   instant_booking_enabled?: boolean
+  // IVA por canal y propiedad
+  apply_vat?: boolean
+  vat_percent?: number
 }
 
 export interface UpdatePropertyChannelData {
@@ -78,9 +83,12 @@ export interface UpdatePropertyChannelData {
   commission_override_sale?: number
   availability_sync_enabled?: boolean
   instant_booking_enabled?: boolean
+  // IVA por canal y propiedad
+  apply_vat?: boolean
+  vat_percent?: number
 }
 
 // Tipo para mostrar canales con información de la propiedad
 export interface PropertyChannelWithDetails extends PropertyChannel {
-  channel?: DistributionChannel
-} 
+  channel: DistributionChannel
+}

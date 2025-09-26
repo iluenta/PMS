@@ -24,6 +24,7 @@ import {
   type Guest, 
   type Reservation,
   calculateRequiredAmount,
+  calculateRequiredAmountWithVat,
   calculatePaymentStatus
 } from "@/lib/supabase"
 import { getActivePropertyChannels } from "@/lib/channels"
@@ -55,6 +56,7 @@ import {
 import { GuestPicker } from '@/components/people/GuestPicker'
 import { ReservationStatusSelect } from '@/components/ui/reservation-status'
 import { useToast } from '@/hooks/use-toast'
+import { formatCurrency } from '@/lib/utils'
 
 export default function Bookings() {
 
@@ -66,6 +68,7 @@ export default function Bookings() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
   const [reservationPayments, setReservationPayments] = useState<{[key: string]: any[]}>({})
+  const [propertyChannels, setPropertyChannels] = useState<PropertyChannelWithDetails[]>([])
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -394,6 +397,25 @@ export default function Bookings() {
     }
   }, [user?.tenant_id, fetchData])
 
+  // Load property channels when selected property changes
+  useEffect(() => {
+    const loadChannels = async () => {
+      if (selectedProperty?.id) {
+        try {
+          const channels = await getActivePropertyChannels(selectedProperty.id)
+          setPropertyChannels(channels)
+        } catch (error) {
+          console.error('Error loading property channels:', error)
+          setPropertyChannels([])
+        }
+      } else {
+        setPropertyChannels([])
+      }
+    }
+    
+    loadChannels()
+  }, [selectedProperty?.id])
+
   // Memoize properties to avoid unnecessary re-renders
   const memoizedProperties = useMemo(() => properties, [properties])
   const memoizedGuests = useMemo(() => guests, [guests])
@@ -564,8 +586,23 @@ export default function Bookings() {
       property_channel: undefined
     }
 
-    // Calcular importe requerido y estado del pago usando las funciones centralizadas
-    const requiredAmount = calculateRequiredAmount(reservation)
+    // Buscar configuración de IVA del canal
+    const bookingSource = (booking.booking_source || '').toLowerCase()
+    const matchingChannel = propertyChannels.find(pc => {
+      const channelName = (pc.channel?.name || '').toLowerCase()
+      return channelName && (
+        bookingSource === channelName || 
+        bookingSource.includes(channelName) || 
+        channelName.includes(bookingSource)
+      )
+    })
+
+    // Usar configuración de IVA del canal o valores por defecto
+    const applyVat = matchingChannel?.apply_vat ?? true
+    const vatPercent = matchingChannel?.vat_percent ?? 21
+
+    // Calcular importe requerido usando la configuración de IVA del canal
+    const requiredAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
     const completedPayments = (payments || []).filter(p => p?.status === 'completed')
     const totalPayments = completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
     const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
@@ -579,7 +616,12 @@ export default function Bookings() {
       requiredAmount,
       paymentStatus,
       totalPayments,
-      pendingAmount: Math.max(0, pendingAmount)
+      pendingAmount: Math.max(0, pendingAmount),
+      vatInfo: {
+        applyVat,
+        vatPercent,
+        vatAmount: applyVat ? Math.round(((reservation.channel_commission || 0) + (reservation.collection_commission || 0)) * (vatPercent / 100) * 100) / 100 : 0
+      }
     }
   }
 
@@ -934,7 +976,12 @@ function BookingDialog({
     requiredAmount: number; 
     paymentStatus: string; 
     totalPayments: number; 
-    pendingAmount: number 
+    pendingAmount: number;
+    vatInfo: {
+      applyVat: boolean;
+      vatPercent: number;
+      vatAmount: number;
+    }
   }
 }) {
   const { selectedProperty } = useProperty()
@@ -986,6 +1033,12 @@ function BookingDialog({
     sale: number | null;
     charge: number | null;
   }>({ sale: null, charge: null   })
+
+  // Normaliza canal directo/propio para la lógica de comisiones
+  const isDirectChannel = useMemo(
+    () => ["Direct", "Propio"].includes(formData.booking_source),
+    [formData.booking_source]
+  )
 
   // Funciones para el estado del pago - estabilizadas con useCallback
   const getPaymentStatusColor = useCallback((status: string) => {
@@ -1093,23 +1146,27 @@ function BookingDialog({
     setFormData(prev => ({ ...prev, total_amount: newTotal }))
   }, [formData.base_amount, formData.taxes, formData.cleaning_fee])
 
-  // Recalculate commissions when property, channel, or base_amount changes
-  // Only recalculate if we're creating a new booking (not editing) and using old commission system
+  // Recalculate commissions when property or channel changes
+  // Only recalc if creating (not editing) and for canal directo/propio
   useEffect(() => {
-    if (formData.property_id && formData.booking_source && !booking && formData.booking_source === "Propio") {
+    if (formData.property_id && !booking && isDirectChannel) {
       calculateCommissions()
     }
-  }, [formData.property_id, formData.booking_source, formData.base_amount, booking])
+  }, [formData.property_id, isDirectChannel, booking])
 
   // Recalcular comisiones cuando cambie el precio base y haya porcentajes configurados
-  // Para nuevas reservas Y para modificación (ambos casos)
+  // SOLO en creación; en edición respetamos valores guardados en BD
   useEffect(() => {
-    if (formData.booking_source !== "Propio" && commissionPercentages.sale !== null && commissionPercentages.charge !== null) {
+    if (booking) return
+
+    if (!isDirectChannel && commissionPercentages.sale !== null && commissionPercentages.charge !== null) {
       const baseAmount = formData.base_amount || 0
-      const saleCommission = commissionPercentages.sale ? 
-        Math.round((baseAmount * commissionPercentages.sale / 100) * 100) / 100 : 0
-      const chargeCommission = commissionPercentages.charge ? 
-        Math.round((baseAmount * commissionPercentages.charge / 100) * 100) / 100 : 0
+      const saleCommission = commissionPercentages.sale
+        ? Math.round((baseAmount * commissionPercentages.sale / 100) * 100) / 100
+        : 0
+      const chargeCommission = commissionPercentages.charge
+        ? Math.round((baseAmount * commissionPercentages.charge / 100) * 100) / 100
+        : 0
 
       setFormData(prev => ({
         ...prev,
@@ -1117,7 +1174,7 @@ function BookingDialog({
         collection_commission: chargeCommission
       }))
     }
-  }, [formData.base_amount, commissionPercentages, formData.booking_source])
+  }, [formData.base_amount, commissionPercentages, isDirectChannel, booking])
 
   const loadPropertyChannels = async (propertyId: string) => {
     try {
@@ -1432,18 +1489,20 @@ function BookingDialog({
           charge: matchingChannel.commission_override_charge
         })
         
-        // Calcular y aplicar las comisiones automáticamente
-        const baseAmount = formData.base_amount || 0
-        const saleCommission = matchingChannel.commission_override_sale ? 
-          Math.round((baseAmount * matchingChannel.commission_override_sale / 100) * 100) / 100 : 0
-        const chargeCommission = matchingChannel.commission_override_charge ? 
-          Math.round((baseAmount * matchingChannel.commission_override_charge / 100) * 100) / 100 : 0
+        // SOLO en creación: calcular y aplicar comisiones automáticamente
+        if (!booking) {
+          const baseAmount = formData.base_amount || 0
+          const saleCommission = matchingChannel.commission_override_sale ? 
+            Math.round((baseAmount * matchingChannel.commission_override_sale / 100) * 100) / 100 : 0
+          const chargeCommission = matchingChannel.commission_override_charge ? 
+            Math.round((baseAmount * matchingChannel.commission_override_charge / 100) * 100) / 100 : 0
 
-        setFormData(prev => ({
-          ...prev,
-          channel_commission: saleCommission,
-          collection_commission: chargeCommission
-        }))
+          setFormData(prev => ({
+            ...prev,
+            channel_commission: saleCommission,
+            collection_commission: chargeCommission
+          }))
+        }
       } else {
         setCommissionPercentages({ sale: null, charge: null })
       }
@@ -1865,18 +1924,6 @@ function BookingDialog({
                       </div>
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="taxes" className="text-sm font-medium text-gray-700">Impuestos</Label>
-                      <Input
-                        id="taxes"
-                        type="number"
-                        step="0.01"
-                        value={formData.taxes || ""}
-                        onChange={(e) => setFormData({ ...formData, taxes: parseFloat(e.target.value) || 0 })}
-                        placeholder="0.00"
-                        className="h-10"
-                      />
-                    </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="channel_commission" className="text-sm font-medium text-gray-700">
@@ -1928,26 +1975,160 @@ function BookingDialog({
                       )}
                     </div>
                     
-                    {/* Sección de Total, Importe pagado y Importe pendiente - SIEMPRE VISIBLE */}
+                    {/* Campo Impuesto (IVA) */}
+                    <div className="space-y-2">
+                      <Label htmlFor="vat_info" className="text-sm font-medium text-gray-700">
+                        Impuesto
+                        {(() => {
+                          const currentBooking = booking ? {
+                            ...booking,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                            booking_source: formData.booking_source
+                          } : {
+                            id: '',
+                            property_id: formData.property_id,
+                            guest_id: 'guest-jsonb',
+                            check_in: formData.check_in,
+                            check_out: formData.check_out,
+                            guests_count: formData.guests_count,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            status: 'pending',
+                            booking_source: formData.booking_source,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                          } as any
+                          
+                          const { vatInfo } = calculatePaymentInfo(currentBooking, booking ? (reservationPayments?.[booking.id] || []) : [])
+                          return vatInfo.applyVat ? (
+                            <span className="text-blue-600 ml-1">({vatInfo.vatPercent}%)</span>
+                          ) : (
+                            <span className="text-gray-400 ml-1">(Sin IVA)</span>
+                          )
+                        })()}
+                      </Label>
+                      <Input
+                        id="vat_info"
+                        type="text"
+                        value={(() => {
+                          const currentBooking = booking ? {
+                            ...booking,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                            booking_source: formData.booking_source
+                          } : {
+                            id: '',
+                            property_id: formData.property_id,
+                            guest_id: 'guest-jsonb',
+                            check_in: formData.check_in,
+                            check_out: formData.check_out,
+                            guests_count: formData.guests_count,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            status: 'pending',
+                            booking_source: formData.booking_source,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                          } as any
+                          
+                          const { vatInfo } = calculatePaymentInfo(currentBooking, booking ? (reservationPayments?.[booking.id] || []) : [])
+                          return vatInfo.vatAmount.toFixed(2)
+                        })()}
+                        readOnly
+                        className="bg-blue-50 border-blue-200"
+                        onFocus={() => {}}
+                      />
+                      <div className="text-xs text-blue-600">
+                        {(() => {
+                          const currentBooking = booking ? {
+                            ...booking,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                            booking_source: formData.booking_source
+                          } : {
+                            id: '',
+                            property_id: formData.property_id,
+                            guest_id: 'guest-jsonb',
+                            check_in: formData.check_in,
+                            check_out: formData.check_out,
+                            guests_count: formData.guests_count,
+                            total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                            status: 'pending',
+                            booking_source: formData.booking_source,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                            channel_commission: formData.channel_commission || 0,
+                            collection_commission: formData.collection_commission || 0,
+                          } as any
+                          
+                          const { vatInfo } = calculatePaymentInfo(currentBooking, booking ? (reservationPayments?.[booking.id] || []) : [])
+                          const totalCommissions = (formData.channel_commission || 0) + (formData.collection_commission || 0)
+                          
+                          if (!vatInfo.applyVat) {
+                            return "Sin IVA aplicado para este canal"
+                          }
+                          
+                          return `Calculado automáticamente: ${totalCommissions.toFixed(2)} × ${vatInfo.vatPercent}% = €${vatInfo.vatAmount.toFixed(2)}`
+                        })()}
+                        <span className="text-gray-500 ml-2">(Aplicado sobre comisiones)</span>
+                      </div>
+                    </div>
+                    
+                    {/* Sección de Total, Importe pagado e Importe pendiente - SIEMPRE VISIBLE */}
                     <div className="grid grid-cols-3 gap-6 mt-4 p-4 bg-gray-50 rounded-lg">
-                      {/* Total */}
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="text-center">
-                          <Label className="text-sm font-medium text-gray-700 block">Total</Label>
-                          <div className="text-xs text-gray-500">(Sin comisiones)</div>
+                      {/* Importe requerido (alineado en dos líneas) */}
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="text-left flex flex-col">
+                          <div className="text-sm font-medium text-gray-700 whitespace-nowrap leading-tight">Importe</div>
+                          <div className="text-xs text-gray-500 leading-tight">requerido</div>
                         </div>
-                        <div className="text-xl font-bold text-gray-900 text-center">
-                          €{((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
+                        <div className="text-2xl font-bold text-gray-900 text-left tabular-nums whitespace-nowrap leading-none">
+                          {booking ? (() => {
+                            const currentBooking = {
+                              ...booking,
+                              total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                              channel_commission: formData.channel_commission || 0,
+                              collection_commission: formData.collection_commission || 0,
+                              booking_source: formData.booking_source
+                            }
+                            const { requiredAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
+                            return formatCurrency(requiredAmount)
+                          })() : (() => {
+                            const currentBooking = {
+                              id: '',
+                              property_id: formData.property_id,
+                              guest_id: 'guest-jsonb',
+                              check_in: formData.check_in,
+                              check_out: formData.check_out,
+                              guests_count: formData.guests_count,
+                              total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                              status: 'pending',
+                              booking_source: formData.booking_source,
+                              created_at: new Date().toISOString(),
+                              updated_at: new Date().toISOString(),
+                              channel_commission: formData.channel_commission || 0,
+                              collection_commission: formData.collection_commission || 0,
+                            } as any
+                            const { requiredAmount } = calculatePaymentInfo(currentBooking, [])
+                            return formatCurrency(requiredAmount)
+                          })()}
                         </div>
+                        <div className="text-xs text-gray-500 mt-1">(Tras comisiones)</div>
                       </div>
                       
                       {/* Importe pagado */}
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="text-center">
-                          <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
-                          <div className="text-xs text-gray-500">pagado</div>
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="text-left flex flex-col">
+                          <Label className="text-sm font-medium text-gray-700 block whitespace-nowrap leading-tight">Importe</Label>
+                          <div className="text-xs text-gray-500 leading-tight">pagado</div>
                         </div>
-                        <div className="text-xl font-bold text-green-600 text-center">
+                        <div className="text-2xl font-bold text-green-600 text-left tabular-nums whitespace-nowrap leading-none">
                           {booking ? (() => {
                             const currentBooking = {
                               ...booking,
@@ -1957,18 +2138,18 @@ function BookingDialog({
                               booking_source: formData.booking_source
                             }
                             const { totalPayments } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
-                            return `€${totalPayments.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`
-                          })() : '€0,00'}
+                            return formatCurrency(totalPayments)
+                          })() : formatCurrency(0)}
                         </div>
                       </div>
                       
                       {/* Importe pendiente */}
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="text-center">
-                          <Label className="text-sm font-medium text-gray-700 block">Importe</Label>
-                          <div className="text-xs text-gray-500">pendiente</div>
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="text-left flex flex-col">
+                          <Label className="text-sm font-medium text-gray-700 block whitespace-nowrap leading-tight">Importe</Label>
+                          <div className="text-xs text-gray-500 leading-tight">pendiente</div>
                         </div>
-                        <div className="text-xl font-bold text-orange-600 text-center">
+                        <div className="text-2xl font-bold text-orange-600 text-left tabular-nums whitespace-nowrap leading-none">
                           {booking ? (() => {
                             const currentBooking = {
                               ...booking,
@@ -1978,8 +2159,27 @@ function BookingDialog({
                               booking_source: formData.booking_source
                             }
                             const { pendingAmount } = calculatePaymentInfo(currentBooking, reservationPayments?.[booking.id] || [])
-                            return `€${pendingAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`
-                          })() : `€${((formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}`}
+                            return formatCurrency(pendingAmount)
+                          })() : (() => {
+                            // Calcular pendiente en ALTA igual que en edición: requerido - pagado (0)
+                            const currentBooking = {
+                              id: '',
+                              property_id: formData.property_id,
+                              guest_id: 'guest-jsonb',
+                              check_in: formData.check_in,
+                              check_out: formData.check_out,
+                              guests_count: formData.guests_count,
+                              total_amount: (formData.base_amount || 0) + (formData.taxes || 0) + (formData.cleaning_fee || 0),
+                              status: 'pending',
+                              booking_source: formData.booking_source,
+                              created_at: new Date().toISOString(),
+                              updated_at: new Date().toISOString(),
+                              channel_commission: formData.channel_commission || 0,
+                              collection_commission: formData.collection_commission || 0,
+                            } as any
+                            const { pendingAmount } = calculatePaymentInfo(currentBooking, [])
+                            return formatCurrency(pendingAmount)
+                          })()}
                         </div>
                       </div>
                     </div>

@@ -18,6 +18,8 @@ async function checkConnectionHealth(supabaseClient: SupabaseClient): Promise<bo
     return true
   }
 
+ 
+
   try {
     lastConnectionCheck = Date.now()
     console.log('🔍 Checking Supabase connection health...')
@@ -547,6 +549,41 @@ export function calculatePaymentStatus(reservation: Reservation, payments: any[]
 }
 
 /**
+ * Versión con IVA configurable por canal
+ */
+export function calculatePaymentStatusWithVat(
+  reservation: Reservation, 
+  payments: any[], 
+  vatPercent: number, 
+  applyVat: boolean
+): string {
+  const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const requiredAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
+
+  // Calcular el importe pendiente con precisión de 2 decimales
+  const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
+
+  // Si no hay importe requerido, considerar como pagado
+  if (requiredAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si no hay importe pendiente o es exactamente 0, considerar como pagado
+  if (pendingAmount <= 0) {
+    return 'paid'
+  }
+  
+  // Si hay pagos pero no cubren el importe requerido
+  if (totalPayments > 0) {
+    return 'partial'
+  } 
+  // Si no hay pagos
+  else {
+    return 'pending'
+  }
+}
+
+/**
  * Calcula el desglose completo de importes para una reserva
  * @param reservation - Objeto de reserva
  * @returns Objeto con todos los importes calculados
@@ -558,6 +595,48 @@ export function calculateReservationAmounts(reservation: Reservation) {
   const totalCommissions = channelCommission + collectionCommission
   const commissionIVA = totalCommissions * 0.21
   const finalAmount = calculateRequiredAmount(reservation)
+
+  return {
+    totalAmount,
+    channelCommission,
+    collectionCommission,
+    totalCommissions,
+    commissionIVA,
+    finalAmount: Math.max(0, Math.round(finalAmount * 100) / 100)
+  }
+}
+
+/**
+ * Versión con IVA configurable por canal.
+ */
+export function calculateRequiredAmountWithVat(
+  reservation: Reservation,
+  vatPercent: number,
+  applyVat: boolean
+): number {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+
+  const vatFactor = applyVat ? (1 + (Number(vatPercent) || 0) / 100) : 1
+  const totalCommissionsWithVAT = totalCommissions * vatFactor
+  const result = totalAmount - totalCommissionsWithVAT
+  const rounded = Math.round(result * 100) / 100
+  return Math.max(0, rounded)
+}
+
+export function calculateReservationAmountsWithVat(
+  reservation: Reservation,
+  vatPercent: number,
+  applyVat: boolean
+) {
+  const totalAmount = reservation.total_amount || 0
+  const channelCommission = reservation.channel_commission || 0
+  const collectionCommission = reservation.collection_commission || 0
+  const totalCommissions = channelCommission + collectionCommission
+  const commissionIVA = totalCommissions * ((applyVat ? (Number(vatPercent) || 0) : 0) / 100)
+  const finalAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
 
   return {
     totalAmount,

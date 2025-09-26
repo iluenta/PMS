@@ -21,9 +21,12 @@ import {
   type Payment,
   type Reservation,
   calculateRequiredAmount,
+  calculateRequiredAmountWithVat,
   calculateReservationAmounts,
+  calculateReservationAmountsWithVat,
   calculatePaymentStatus,
 } from "@/lib/supabase"
+import { getActivePropertyChannels } from "@/lib/channels"
 import { useProperty } from "@/hooks/useProperty"
 import { useAuth } from "@/contexts/AuthContext"
 import { CreditCard, Plus, Edit, CheckCircle, Clock, AlertCircle, DollarSign, Building, Trash2 } from "lucide-react"
@@ -41,6 +44,7 @@ export default function Payments() {
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all")
   const [sortFilter, setSortFilter] = useState<string>("date_desc")
   const [yearFilter, setYearFilter] = useState<string>(new Date().getFullYear().toString())
+  const [propertyChannels, setPropertyChannels] = useState<any[]>([])
 
   const { selectedProperty } = useProperty()
   const { user } = useAuth()
@@ -103,6 +107,43 @@ export default function Payments() {
       setLoading(false)
     }
   }, [selectedProperty])
+
+  // Load property channels when selected property changes
+  useEffect(() => {
+    const loadChannels = async () => {
+      if (selectedProperty?.id) {
+        try {
+          const channels = await getActivePropertyChannels(selectedProperty.id)
+          setPropertyChannels(channels)
+        } catch (error) {
+          console.error('Error loading property channels:', error)
+          setPropertyChannels([])
+        }
+      } else {
+        setPropertyChannels([])
+      }
+    }
+    
+    loadChannels()
+  }, [selectedProperty?.id])
+
+  // Helper function to get VAT configuration for a reservation
+  const getVatConfig = (reservation: Reservation) => {
+    const bookingSource = (reservation.channel || '').toLowerCase()
+    const matchingChannel = propertyChannels.find(pc => {
+      const channelName = (pc.channel?.name || '').toLowerCase()
+      return channelName && (
+        bookingSource === channelName || 
+        bookingSource.includes(channelName) || 
+        channelName.includes(bookingSource)
+      )
+    })
+
+    return {
+      applyVat: matchingChannel?.apply_vat ?? true,
+      vatPercent: matchingChannel?.vat_percent ?? 21
+    }
+  }
 
   const fetchReservations = async (propertyId: string) => {
     try {
@@ -223,8 +264,9 @@ export default function Payments() {
       return { totalPaid, totalAmount: 0, percentage: 0 }
     }
     
-    // Usar calculateRequiredAmount en lugar de total_amount para obtener el importe real requerido
-    const totalAmount = calculateRequiredAmount(reservation)
+    // Usar calculateRequiredAmountWithVat con configuración del canal
+    const { applyVat, vatPercent } = getVatConfig(reservation)
+    const totalAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
     
     // Si el importe requerido es €0, considerar como pagado al 100%
     let percentage = 0
@@ -484,7 +526,8 @@ export default function Payments() {
         // Verificar si la reserva tiene algún pago asociado
         const hasPayments = payments.some(p => p.reservation_id === r.id)
         if (!hasPayments) {
-          const requiredAmount = calculateRequiredAmount(r)
+          const { applyVat, vatPercent } = getVatConfig(r)
+          const requiredAmount = calculateRequiredAmountWithVat(r, vatPercent, applyVat)
           return sum + requiredAmount
         }
         return sum
@@ -1154,7 +1197,8 @@ function PaymentDialog({
           const { totalPaid, totalAmount, percentage } = getReservationPaymentProgress(formData.reservation_id)
           const newPaymentAmount = parseFloat(formData.amount)
           const newTotalPayments = totalPaid + newPaymentAmount
-          const requiredAmount = calculateRequiredAmount(selectedReservation)
+          const { applyVat, vatPercent } = getVatConfig(selectedReservation)
+          const requiredAmount = calculateRequiredAmountWithVat(selectedReservation, vatPercent, applyVat)
 
           // Validar que no se exceda el importe requerido
           if (newTotalPayments > requiredAmount) {
@@ -1215,7 +1259,33 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
     ? reservations.find(r => r.id === formData.reservation_id) 
     : null
 
-  const reservationAmounts = selectedReservation ? calculateReservationAmounts(selectedReservation) : null
+  // Configuración de IVA por canal para la reserva seleccionada
+  const [applyVat, setApplyVat] = useState<boolean>(true)
+  const [vatPercent, setVatPercent] = useState<number>(21)
+
+  useEffect(() => {
+    const loadVat = async () => {
+      if (!selectedReservation || !selectedProperty) return
+      try {
+        const pcs = await getActivePropertyChannels(selectedProperty.id)
+        const src = (selectedReservation.external_source || selectedReservation.channel || selectedReservation.property_channel?.channel?.name || '').toLowerCase()
+        const match = pcs.find((pc: any) => {
+          const name = (pc.channel?.name || '').toLowerCase()
+          return name && (src === name || src.includes(name) || name.includes(src))
+        })
+        setApplyVat(match?.apply_vat ?? true)
+        setVatPercent(match?.vat_percent ?? 21)
+      } catch (e) {
+        setApplyVat(true)
+        setVatPercent(21)
+      }
+    }
+    loadVat()
+  }, [selectedReservation, selectedProperty])
+
+  const reservationAmounts = selectedReservation
+    ? calculateReservationAmountsWithVat(selectedReservation, vatPercent, applyVat)
+    : null
   
   // Usar useMemo para estabilizar el cálculo de pagos parciales
   const totalCompletedPaidForSelected = useMemo(() => {
@@ -1336,7 +1406,7 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">IVA (21% de comisiones)</Label>
+                <Label className="text-sm font-medium text-gray-700">IVA ({vatPercent}% de comisiones)</Label>
                 <Input
                   value={`€${reservationAmounts.commissionIVA.toFixed(2)}`}
                   readOnly

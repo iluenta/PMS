@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getActivePropertyChannels } from '@/lib/channels'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProperty } from '@/contexts/PropertyContext'
 
@@ -10,6 +11,7 @@ export interface DashboardStats {
   netProfit: number
   commissions: number
   expenses: number
+  cancelledReservations: number
 }
 
 export interface DashboardFilters {
@@ -29,10 +31,12 @@ export function useDashboardStats() {
     grossIncome: 0,
     netProfit: 0,
     commissions: 0,
-    expenses: 0
+    expenses: 0,
+    cancelledReservations: 0
   })
 
   const [availableYears, setAvailableYears] = useState<number[]>([])
+  const [recentReservations, setRecentReservations] = useState<any[]>([])
 
   // Función para verificar si una fecha está en el año seleccionado
   const isDateInYear = (date: string, year: string) => {
@@ -50,8 +54,10 @@ export function useDashboardStats() {
         grossIncome: 0,
         netProfit: 0,
         commissions: 0,
-        expenses: 0
+        expenses: 0,
+        cancelledReservations: 0
       })
+      setRecentReservations([])
       setLoading(false)
       return
     }
@@ -83,7 +89,10 @@ export function useDashboardStats() {
         throw expensesError
       }
 
-      // 3. Filtrar datos por año
+      // 3. Cargar canales activos de la propiedad (para IVA por canal)
+      const propertyChannels = await getActivePropertyChannels(selectedProperty.id)
+
+      // 4. Filtrar datos por año
       const filteredReservations = reservations?.filter(reservation => 
         isDateInYear(reservation.check_in, yearFilter)
       ) || []
@@ -92,11 +101,19 @@ export function useDashboardStats() {
         isDateInYear(expense.date, yearFilter)
       ) || []
 
-      // 4. Calcular estadísticas
-      const newStats = calculateStats(filteredReservations, filteredExpenses)
+      // 5. Calcular estadísticas
+      const newStats = calculateStats(filteredReservations, filteredExpenses, propertyChannels)
       setStats(newStats)
 
-      // 5. Actualizar años disponibles
+      // Últimas 5 reservas (no canceladas), ordenadas por check_in desc
+      const nonCancelled = filteredReservations.filter(r => r.status !== 'cancelled')
+      const sortedRecent = nonCancelled
+        .slice()
+        .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
+        .slice(0, 5)
+      setRecentReservations(sortedRecent)
+
+      // 6. Actualizar años disponibles
       const yearsFromReservations = new Set<number>()
       reservations?.forEach(reservation => {
         if (reservation.check_in) {
@@ -119,7 +136,8 @@ export function useDashboardStats() {
         grossIncome: 0,
         netProfit: 0,
         commissions: 0,
-        expenses: 0
+        expenses: 0,
+        cancelledReservations: 0
       })
     } finally {
       setLoading(false)
@@ -127,10 +145,13 @@ export function useDashboardStats() {
   }
 
   // Función para calcular las estadísticas
-  const calculateStats = (reservations: any[], expenses: any[]): DashboardStats => {
+  const calculateStats = (reservations: any[], expenses: any[], propertyChannels: any[]): DashboardStats => {
     // 1. Reservas (todas excepto canceladas)
     const validReservations = reservations.filter(r => r.status !== 'cancelled')
     const reservationsCount = validReservations.length
+
+    // 1b. Reservas canceladas
+    const cancelledReservations = reservations.filter(r => r.status === 'cancelled').length
 
     // 2. Huéspedes únicos (por email)
     const uniqueGuests = new Set<string>()
@@ -143,25 +164,32 @@ export function useDashboardStats() {
 
     // 3. Ingresos Brutos (reservas no canceladas)
     const grossIncome = validReservations.reduce((sum, reservation) => {
-      return sum + (reservation.total_amount || 0)
+      const amt = Number(reservation.total_amount) || 0
+      return sum + amt
     }, 0)
 
-    // 4. Comisiones (con IVA 21% aplicado)
-    const commissionsBeforeIVA = validReservations.reduce((sum, reservation) => {
-      const channelCommission = reservation.channel_commission || 0
-      const collectionCommission = reservation.collection_commission || 0
-      return sum + channelCommission + collectionCommission
+    // 4. Comisiones (con IVA por canal)
+    const norm = (s: string | null | undefined) => (s || '').toLowerCase()
+    const commissionsWithIVA = validReservations.reduce((sum, reservation) => {
+      const base = (Number(reservation.channel_commission) || 0) + (Number(reservation.collection_commission) || 0)
+      const src = norm(reservation.booking_source)
+      const matched = propertyChannels.find((pc: any) => {
+        const name = norm(pc.channel?.name)
+        return name && (src === name || src.includes(name) || name.includes(src))
+      })
+      const applyVat = matched?.apply_vat ?? true
+      const vatPercent = matched?.vat_percent ?? 21
+      const factor = applyVat ? (1 + (Number(vatPercent) || 0) / 100) : 1
+      return sum + base * factor
     }, 0)
-    
-    // Aplicar IVA 21% a las comisiones
-    const commissionsWithIVA = commissionsBeforeIVA * 1.21
 
     // 5. Gastos (pending + completed) - TODOS los gastos para mostrar en la tarjeta
     const validExpenses = expenses.filter(e => 
       e.status === 'pending' || e.status === 'completed'
     )
     const expensesTotal = validExpenses.reduce((sum, expense) => {
-      return sum + (expense.amount || 0)
+      const amt = Math.abs(expense.amount || 0)
+      return sum + amt
     }, 0)
 
     // 6. Gastos asociados a reservas (solo estos se restan del beneficio neto)
@@ -169,11 +197,13 @@ export function useDashboardStats() {
       e.reservation_id !== null && e.reservation_id !== undefined
     )
     const reservationExpensesTotal = reservationExpenses.reduce((sum, expense) => {
-      return sum + (expense.amount || 0)
+      const amt = Math.abs(expense.amount || 0)
+      return sum + amt
     }, 0)
 
-    // 7. Beneficio Neto (Ingresos - Gastos de Reservas - Comisiones con IVA)
-    const netProfit = grossIncome - reservationExpensesTotal - commissionsWithIVA
+    // 7. Beneficio Neto (Ingresos - Gastos (todos) - Comisiones con IVA)
+    // Para cuadrar con las tarjetas mostradas (Gastos = todos), restamos expensesTotal aquí
+    const netProfit = grossIncome - expensesTotal - commissionsWithIVA
 
     return {
       reservations: reservationsCount,
@@ -181,7 +211,8 @@ export function useDashboardStats() {
       grossIncome,
       netProfit,
       commissions: commissionsWithIVA,
-      expenses: expensesTotal // Mostrar todos los gastos en la tarjeta
+      expenses: expensesTotal, // Mostrar todos los gastos en la tarjeta
+      cancelledReservations
     }
   }
 
@@ -196,6 +227,7 @@ export function useDashboardStats() {
     yearFilter,
     setYearFilter,
     availableYears,
-    refreshStats: loadStats
+    refreshStats: loadStats,
+    recentReservations
   }
 }

@@ -44,9 +44,7 @@ export default function EditPropertyChannelModal({
     commission_override_charge: 0,
     commission_override_sale: 0,
     availability_sync_enabled: true,
-    apply_vat: true,
-    vat_percent: 21,
-    instant_booking_enabled: false
+    instant_booking_enabled: false,
   })
 
   const { toast } = useToast()
@@ -72,8 +70,6 @@ export default function EditPropertyChannelModal({
           commission_override_sale: propertyChannel.commission_override_sale || 0,
           availability_sync_enabled: propertyChannel.availability_sync_enabled,
           instant_booking_enabled: propertyChannel.instant_booking_enabled,
-          apply_vat: propertyChannel.apply_vat ?? true,
-          vat_percent: propertyChannel.vat_percent ?? 21,
         })
       }
     }
@@ -113,7 +109,7 @@ export default function EditPropertyChannelModal({
     try {
       setLoading(true)
       
-      // Actualizar tambiÃ©n el channel_id si ha cambiado
+      // Actualizar también el channel_id si ha cambiado
       const updateData = {
         ...formData,
         channel_id: selectedChannelId
@@ -146,15 +142,15 @@ export default function EditPropertyChannelModal({
   }
 
   // Obtener el canal seleccionado
-  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId) || propertyChannel
+  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Canal de Distribuci&oacute;n</DialogTitle>
+          <DialogTitle>Editar Canal de Distribución</DialogTitle>
           <DialogDescription>
-            Modifica la configuraci&oacute;n del canal de distribuci&oacute;n
+            Modifica la configuración del canal de distribución
           </DialogDescription>
         </DialogHeader>
 
@@ -445,38 +441,6 @@ export default function EditPropertyChannelModal({
                   }
                 />
               </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="apply_vat">Aplicar IVA</Label>
-                </div>
-                <Switch
-                  id="apply_vat"
-                  checked={formData.apply_vat}
-                  onCheckedChange={(checked) => 
-                    setFormData(prev => ({ ...prev, apply_vat: checked }))
-                  }
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 w-full">
-                  <Label htmlFor="vat_percent" className="whitespace-nowrap">% IVA</Label>
-                  <Input
-                    id="vat_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    className="w-24"
-                    value={formData.vat_percent}
-                    onChange={(e) => 
-                      setFormData(prev => ({ ...prev, vat_percent: parseFloat(e.target.value) || 0 }))
-                    }
-                    disabled={!formData.apply_vat}
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
@@ -518,4 +482,3 @@ export default function EditPropertyChannelModal({
     </Dialog>
   )
 } 
-

@@ -225,8 +225,30 @@ export async function getPropertyChannels(propertyId: string): Promise<PropertyC
     const { data, error } = await supabase
       .from("property_channels")
       .select(`
-        *,
-        channel:distribution_channels(*)
+        id,
+        property_id,
+        channel_id,
+        is_enabled,
+        sync_enabled,
+        auto_update_ratings,
+        external_property_id,
+        external_listing_id,
+        external_place_id,
+        listing_url,
+        review_url,
+        property_rating,
+        property_review_count,
+        last_rating_update,
+        price_adjustment_percentage,
+        commission_override_charge,
+        commission_override_sale,
+        availability_sync_enabled,
+        instant_booking_enabled,
+        apply_vat,
+        vat_percent,
+        created_at,
+        updated_at,
+        channel:distribution_channels!inner(*)
       `)
       .eq("property_id", propertyId)
       .order("created_at")
@@ -236,7 +258,11 @@ export async function getPropertyChannels(propertyId: string): Promise<PropertyC
       throw new Error("Error al cargar los canales de la propiedad")
     }
 
-    return data || []
+    // Map the data to ensure the channel is a single object, not an array
+    return (data || []).map(item => ({
+      ...item,
+      channel: Array.isArray(item.channel) ? item.channel[0] : item.channel
+    })) as PropertyChannelWithDetails[]
   } catch (error) {
     console.error("Error in getPropertyChannels:", error)
     throw error
@@ -252,8 +278,30 @@ export async function getActivePropertyChannels(propertyId: string): Promise<Pro
     const { data, error } = await supabase
       .from("property_channels")
       .select(`
-        *,
-        channel:distribution_channels(*)
+        id,
+        property_id,
+        channel_id,
+        is_enabled,
+        sync_enabled,
+        auto_update_ratings,
+        external_property_id,
+        external_listing_id,
+        external_place_id,
+        listing_url,
+        review_url,
+        property_rating,
+        property_review_count,
+        last_rating_update,
+        price_adjustment_percentage,
+        commission_override_charge,
+        commission_override_sale,
+        availability_sync_enabled,
+        instant_booking_enabled,
+        apply_vat,
+        vat_percent,
+        created_at,
+        updated_at,
+        channel:distribution_channels!inner(*)
       `)
       .eq("property_id", propertyId)
       .eq("is_enabled", true) // Solo canales activos
@@ -264,7 +312,11 @@ export async function getActivePropertyChannels(propertyId: string): Promise<Pro
       throw new Error("Error al cargar los canales activos de la propiedad")
     }
 
-    return data || []
+    // Map the data to ensure the channel is a single object, not an array
+    return (data || []).map(item => ({
+      ...item,
+      channel: Array.isArray(item.channel) ? item.channel[0] : item.channel
+    })) as PropertyChannelWithDetails[]
   } catch (error) {
     console.error("Error in getActivePropertyChannels:", error)
     throw error

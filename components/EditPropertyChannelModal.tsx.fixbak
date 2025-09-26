@@ -1,4 +1,32 @@
-"use client"
+﻿            {/* IVA por canal */}
+            <div className=\"grid grid-cols-2 gap-4\">
+              <div className=\"flex items-center justify-between\">
+                <Label htmlFor=\"apply_vat\">Aplicar IVA a comisiones</Label>
+                <Switch
+                  id=\"apply_vat\"
+                  checked={!!formData.apply_vat}
+                  onCheckedChange={(checked) =>
+                    setFormData(prev => ({ ...prev, apply_vat: checked }))
+                  }
+                />
+              </div>
+              <div className=\"space-y-2\">
+                <Label htmlFor=\"vat_percent\">IVA (%)</Label>
+                <Input
+                  id=\"vat_percent\"
+                  type=\"number\"
+                  min=\"0\"
+                  max=\"100\"
+                  step=\"0.1\"
+                  value={formData.vat_percent ?? 21}
+                  onChange={(e) =>
+                    setFormData(prev => ({ ...prev, vat_percent: parseFloat(e.target.value) || 0 }))
+                  }
+                  disabled={!formData.apply_vat}
+                />
+              </div>
+            </div>
+<Label htmlFor="price_adjustment_percentage">Ajuste de Precio (%)</Label>use client"
 
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -44,10 +72,11 @@ export default function EditPropertyChannelModal({
     commission_override_charge: 0,
     commission_override_sale: 0,
     availability_sync_enabled: true,
-    apply_vat: true,
+        apply_vat: true,
     vat_percent: 21,
-    instant_booking_enabled: false
-  })
+    apply_vat: true,
+    vat_percent: 21
+  )
 
   const { toast } = useToast()
   const { selectedProperty } = useProperty()
@@ -58,20 +87,8 @@ export default function EditPropertyChannelModal({
       loadAvailableChannels()
       if (propertyChannel) {
         setSelectedChannelId(propertyChannel.channel_id)
-        setFormData({
-          is_enabled: propertyChannel.is_enabled,
-          sync_enabled: propertyChannel.sync_enabled,
-          auto_update_ratings: propertyChannel.auto_update_ratings,
-          external_property_id: propertyChannel.external_property_id || "",
-          external_listing_id: propertyChannel.external_listing_id || "",
-          external_place_id: propertyChannel.external_place_id || "",
-          listing_url: propertyChannel.listing_url || "",
-          review_url: propertyChannel.review_url || "",
-          price_adjustment_percentage: propertyChannel.price_adjustment_percentage || 0,
-          commission_override_charge: propertyChannel.commission_override_charge || 0,
-          commission_override_sale: propertyChannel.commission_override_sale || 0,
-          availability_sync_enabled: propertyChannel.availability_sync_enabled,
-          instant_booking_enabled: propertyChannel.instant_booking_enabled,
+                  apply_vat: propertyChannel.apply_vat ?? true,
+          vat_percent: propertyChannel.vat_percent ?? 21,
           apply_vat: propertyChannel.apply_vat ?? true,
           vat_percent: propertyChannel.vat_percent ?? 21,
         })
@@ -123,7 +140,7 @@ export default function EditPropertyChannelModal({
       
       toast({
         title: "Canal actualizado",
-        description: "La configuración del canal se ha actualizado correctamente",
+        description: "La configuraciÃ³n del canal se ha actualizado correctamente",
       })
       
       onSuccess()
@@ -133,7 +150,7 @@ export default function EditPropertyChannelModal({
       console.error("Error updating property channel:", error)
       toast({
         title: "Error",
-        description: "No se pudo actualizar la configuración del canal",
+        description: "No se pudo actualizar la configuraciÃ³n del canal",
         variant: "destructive",
       })
     } finally {
@@ -146,15 +163,15 @@ export default function EditPropertyChannelModal({
   }
 
   // Obtener el canal seleccionado
-  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId) || propertyChannel
+  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Canal de Distribuci&oacute;n</DialogTitle>
+          <DialogTitle>Editar Canal de DistribuciÃ³n</DialogTitle>
           <DialogDescription>
-            Modifica la configuraci&oacute;n del canal de distribuci&oacute;n
+            Modifica la configuraciÃ³n del canal de distribuciÃ³n
           </DialogDescription>
         </DialogHeader>
 
@@ -181,7 +198,7 @@ export default function EditPropertyChannelModal({
 
           {/* Selector de Canal */}
           <div className="space-y-2">
-            <Label htmlFor="channel">Canal de Distribución *</Label>
+            <Label htmlFor="channel">Canal de DistribuciÃ³n *</Label>
             {channelsLoading ? (
               <div className="flex items-center gap-2 p-2 border rounded-md">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -226,14 +243,14 @@ export default function EditPropertyChannelModal({
                 <span className="font-medium">{selectedChannel.name}</span>
               </div>
               <p className="text-sm text-gray-600">
-                Canal seleccionado - Configura los detalles específicos a continuación
+                Canal seleccionado - Configura los detalles especÃ­ficos a continuaciÃ³n
               </p>
             </div>
           )}
 
           <Separator />
 
-          {/* Estado y Configuración Básica */}
+          {/* Estado y ConfiguraciÃ³n BÃ¡sica */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center justify-between">
               <Label htmlFor="is_enabled">Canal Activo</Label>
@@ -247,7 +264,7 @@ export default function EditPropertyChannelModal({
             </div>
             
             <div className="flex items-center justify-between">
-              <Label htmlFor="sync_enabled">Sincronización</Label>
+              <Label htmlFor="sync_enabled">SincronizaciÃ³n</Label>
               <Switch
                 id="sync_enabled"
                 checked={formData.sync_enabled}
@@ -295,7 +312,7 @@ export default function EditPropertyChannelModal({
               <Label htmlFor="external_place_id">ID de Lugar</Label>
               <Input
                 id="external_place_id"
-                placeholder="ID de ubicación (opcional)"
+                placeholder="ID de ubicaciÃ³n (opcional)"
                 value={formData.external_place_id}
                 onChange={(e) => 
                   setFormData(prev => ({ ...prev, external_place_id: e.target.value }))
@@ -325,7 +342,7 @@ export default function EditPropertyChannelModal({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="review_url">URL de Reseñas</Label>
+              <Label htmlFor="review_url">URL de ReseÃ±as</Label>
               <Input
                 id="review_url"
                 type="url"
@@ -340,11 +357,11 @@ export default function EditPropertyChannelModal({
 
           {/* Comisiones */}
           <div className="space-y-4">
-            <h4 className="font-medium text-red-600">💰 Comisiones</h4>
+            <h4 className="font-medium text-red-600">ðŸ’° Comisiones</h4>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="commission_override_charge">Comisión Cobro (%)</Label>
+                <Label htmlFor="commission_override_charge">ComisiÃ³n Cobro (%)</Label>
                 <Input
                   id="commission_override_charge"
                   type="number"
@@ -360,7 +377,7 @@ export default function EditPropertyChannelModal({
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="commission_override_sale">Comisión Venta (%)</Label>
+                <Label htmlFor="commission_override_sale">ComisiÃ³n Venta (%)</Label>
                 <Input
                   id="commission_override_sale"
                   type="number"
@@ -435,7 +452,7 @@ export default function EditPropertyChannelModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
-                  <Label htmlFor="instant_booking_enabled">Reserva Instantánea</Label>
+                  <Label htmlFor="instant_booking_enabled">Reserva InstantÃ¡nea</Label>
                 </div>
                 <Switch
                   id="instant_booking_enabled"
@@ -445,38 +462,6 @@ export default function EditPropertyChannelModal({
                   }
                 />
               </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="apply_vat">Aplicar IVA</Label>
-                </div>
-                <Switch
-                  id="apply_vat"
-                  checked={formData.apply_vat}
-                  onCheckedChange={(checked) => 
-                    setFormData(prev => ({ ...prev, apply_vat: checked }))
-                  }
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 w-full">
-                  <Label htmlFor="vat_percent" className="whitespace-nowrap">% IVA</Label>
-                  <Input
-                    id="vat_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    className="w-24"
-                    value={formData.vat_percent}
-                    onChange={(e) => 
-                      setFormData(prev => ({ ...prev, vat_percent: parseFloat(e.target.value) || 0 }))
-                    }
-                    disabled={!formData.apply_vat}
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
@@ -485,19 +470,19 @@ export default function EditPropertyChannelModal({
             <div className="space-y-2">
               <h4 className="font-medium flex items-center gap-2">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                Estadísticas Actuales
+                EstadÃ­sticas Actuales
               </h4>
               <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <div className="flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                   <span>
                     Rating: {propertyChannel.property_rating && propertyChannel.property_rating > 0 ? propertyChannel.property_rating.toFixed(1) : "-"} 
-                    ({propertyChannel.property_review_count || 0} reseñas)
+                    ({propertyChannel.property_review_count || 0} reseÃ±as)
                   </span>
                 </div>
                 {propertyChannel.last_rating_update && (
                   <p className="text-xs text-gray-600 mt-1">
-                    Última actualización: {new Date(propertyChannel.last_rating_update).toLocaleDateString()}
+                    Ãšltima actualizaciÃ³n: {new Date(propertyChannel.last_rating_update).toLocaleDateString()}
                   </p>
                 )}
               </div>
@@ -518,4 +503,5 @@ export default function EditPropertyChannelModal({
     </Dialog>
   )
 } 
+
 

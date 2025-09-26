@@ -101,17 +101,26 @@ export default function PropertyChannelCardReadOnly({
 
           {/* Comisiones destacadas */}
           <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs font-medium text-gray-500 mb-2">COMISIONES</div>
-            <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-gray-500 mb-2">COMISIONES E IMPUESTOS</div>
+            <div className="grid grid-cols-3 gap-2">
               <div className="text-center">
                 <div className="text-sm font-semibold text-red-600">
                   {formatCommission(propertyChannel.commission_override_charge)} cobro
                 </div>
               </div>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <div className="text-center">
+              <div className="text-center border-x border-gray-200">
                 <div className="text-sm font-semibold text-red-600">
                   {formatCommission(propertyChannel.commission_override_sale)} venta
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={`text-sm font-semibold ${propertyChannel.apply_vat ? 'text-green-600' : 'text-gray-400'}`}>
+                  {propertyChannel.apply_vat 
+                    ? `${propertyChannel.vat_percent !== undefined ? propertyChannel.vat_percent : 21}%` 
+                    : '0%'}
+                </div>
+                <div className={`text-xs mt-1 ${propertyChannel.apply_vat ? 'text-green-600' : 'text-gray-500'}`}>
+                  {propertyChannel.apply_vat ? 'IVA' : 'Sin IVA'}
                 </div>
               </div>
             </div>

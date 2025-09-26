@@ -7,31 +7,36 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useProperty } from "@/hooks/useProperty"
-import { getChannels, updatePropertyChannel } from "@/lib/channels"
-import type { PropertyChannelWithDetails, UpdatePropertyChannelData, DistributionChannel } from "@/types/channels"
+import { getChannels, createPropertyChannel } from "@/lib/channels"
+import type { DistributionChannel, CreatePropertyChannelData } from "@/types/channels"
 import { Loader2, ExternalLink, RefreshCw, Clock, Zap, Star, Building } from "lucide-react"
 
-interface EditPropertyChannelModalProps {
+interface AddPropertyChannelModalProps {
   isOpen: boolean
   onClose: () => void
-  propertyChannel: PropertyChannelWithDetails | null
+  propertyId: string
   onSuccess: () => void
 }
 
-export default function EditPropertyChannelModal({
+export default function AddPropertyChannelModal({
   isOpen,
   onClose,
-  propertyChannel,
+  propertyId,
   onSuccess,
-}: EditPropertyChannelModalProps) {
+}: AddPropertyChannelModalProps) {
+  const [availableChannels, setAvailableChannels] = useState<DistributionChannel[]>([])
   const [loading, setLoading] = useState(false)
   const [channelsLoading, setChannelsLoading] = useState(false)
-  const [availableChannels, setAvailableChannels] = useState<DistributionChannel[]>([])
   const [selectedChannelId, setSelectedChannelId] = useState<string>("")
-  const [formData, setFormData] = useState<UpdatePropertyChannelData>({
+  
+  const [formData, setFormData] = useState<CreatePropertyChannelData>({
+    property_id: propertyId,
+    channel_id: "",
     is_enabled: true,
     sync_enabled: true,
     auto_update_ratings: false,
@@ -44,40 +49,19 @@ export default function EditPropertyChannelModal({
     commission_override_charge: 0,
     commission_override_sale: 0,
     availability_sync_enabled: true,
-    apply_vat: true,
-    vat_percent: 21,
-    instant_booking_enabled: false
+    instant_booking_enabled: false,
   })
 
   const { toast } = useToast()
   const { selectedProperty } = useProperty()
 
-  // Cargar canales disponibles y datos del canal cuando se abre el modal
+  // Cargar canales disponibles cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
       loadAvailableChannels()
-      if (propertyChannel) {
-        setSelectedChannelId(propertyChannel.channel_id)
-        setFormData({
-          is_enabled: propertyChannel.is_enabled,
-          sync_enabled: propertyChannel.sync_enabled,
-          auto_update_ratings: propertyChannel.auto_update_ratings,
-          external_property_id: propertyChannel.external_property_id || "",
-          external_listing_id: propertyChannel.external_listing_id || "",
-          external_place_id: propertyChannel.external_place_id || "",
-          listing_url: propertyChannel.listing_url || "",
-          review_url: propertyChannel.review_url || "",
-          price_adjustment_percentage: propertyChannel.price_adjustment_percentage || 0,
-          commission_override_charge: propertyChannel.commission_override_charge || 0,
-          commission_override_sale: propertyChannel.commission_override_sale || 0,
-          availability_sync_enabled: propertyChannel.availability_sync_enabled,
-          instant_booking_enabled: propertyChannel.instant_booking_enabled,
-          apply_vat: propertyChannel.apply_vat ?? true,
-          vat_percent: propertyChannel.vat_percent ?? 21,
-        })
-      }
+      setFormData(prev => ({ ...prev, property_id: propertyId }))
     }
-  }, [isOpen, propertyChannel])
+  }, [isOpen, propertyId])
 
   const loadAvailableChannels = async () => {
     try {
@@ -99,8 +83,6 @@ export default function EditPropertyChannelModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!propertyChannel) return
-
     if (!selectedChannelId) {
       toast({
         title: "Error",
@@ -113,27 +95,26 @@ export default function EditPropertyChannelModal({
     try {
       setLoading(true)
       
-      // Actualizar tambiÃ©n el channel_id si ha cambiado
-      const updateData = {
+      const channelData = {
         ...formData,
-        channel_id: selectedChannelId
+        channel_id: selectedChannelId,
       }
-      
-      await updatePropertyChannel(propertyChannel.id, updateData)
+
+      await createPropertyChannel(channelData)
       
       toast({
-        title: "Canal actualizado",
-        description: "La configuración del canal se ha actualizado correctamente",
+        title: "Canal añadido",
+        description: "El canal se ha configurado correctamente para la propiedad",
       })
       
       onSuccess()
       handleClose()
       
     } catch (error) {
-      console.error("Error updating property channel:", error)
+      console.error("Error creating property channel:", error)
       toast({
         title: "Error",
-        description: "No se pudo actualizar la configuración del canal",
+        description: "No se pudo configurar el canal para la propiedad",
         variant: "destructive",
       })
     } finally {
@@ -142,19 +123,36 @@ export default function EditPropertyChannelModal({
   }
 
   const handleClose = () => {
+    setSelectedChannelId("")
+    setFormData({
+      property_id: propertyId,
+      channel_id: "",
+      is_enabled: true,
+      sync_enabled: true,
+      auto_update_ratings: false,
+      external_property_id: "",
+      external_listing_id: "",
+      external_place_id: "",
+      listing_url: "",
+      review_url: "",
+      price_adjustment_percentage: 0,
+      commission_override_charge: 0,
+      commission_override_sale: 0,
+      availability_sync_enabled: true,
+      instant_booking_enabled: false,
+    })
     onClose()
   }
 
-  // Obtener el canal seleccionado
-  const selectedChannel = availableChannels.find(channel => channel.id === selectedChannelId) || propertyChannel
+  const selectedChannel = availableChannels.find(c => c.id === selectedChannelId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Canal de Distribuci&oacute;n</DialogTitle>
+          <DialogTitle>Añadir Canal de Distribución</DialogTitle>
           <DialogDescription>
-            Modifica la configuraci&oacute;n del canal de distribuci&oacute;n
+            Configura un nuevo canal de distribución para esta propiedad
           </DialogDescription>
         </DialogHeader>
 
@@ -178,6 +176,8 @@ export default function EditPropertyChannelModal({
               </div>
             </div>
           )}
+
+          <Separator />
 
           {/* Selector de Canal */}
           <div className="space-y-2">
@@ -211,6 +211,8 @@ export default function EditPropertyChannelModal({
               </Select>
             )}
           </div>
+
+          {/* No hay entidad People en property_channels; la relación es con distribution_channels */}
 
           {/* Preview del canal seleccionado */}
           {selectedChannel && (
@@ -445,72 +447,16 @@ export default function EditPropertyChannelModal({
                   }
                 />
               </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="apply_vat">Aplicar IVA</Label>
-                </div>
-                <Switch
-                  id="apply_vat"
-                  checked={formData.apply_vat}
-                  onCheckedChange={(checked) => 
-                    setFormData(prev => ({ ...prev, apply_vat: checked }))
-                  }
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 w-full">
-                  <Label htmlFor="vat_percent" className="whitespace-nowrap">% IVA</Label>
-                  <Input
-                    id="vat_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    className="w-24"
-                    value={formData.vat_percent}
-                    onChange={(e) => 
-                      setFormData(prev => ({ ...prev, vat_percent: parseFloat(e.target.value) || 0 }))
-                    }
-                    disabled={!formData.apply_vat}
-                  />
-                </div>
-              </div>
             </div>
           </div>
-
-          {/* Stats actuales */}
-          {propertyChannel && ((propertyChannel.property_rating || 0) > 0 || (propertyChannel.property_review_count || 0) > 0) && (
-            <div className="space-y-2">
-              <h4 className="font-medium flex items-center gap-2">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                Estadísticas Actuales
-              </h4>
-              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <div className="flex items-center gap-2 text-sm">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span>
-                    Rating: {propertyChannel.property_rating && propertyChannel.property_rating > 0 ? propertyChannel.property_rating.toFixed(1) : "-"} 
-                    ({propertyChannel.property_review_count || 0} reseñas)
-                  </span>
-                </div>
-                {propertyChannel.last_rating_update && (
-                  <p className="text-xs text-gray-600 mt-1">
-                    Última actualización: {new Date(propertyChannel.last_rating_update).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose} className="border-blue-600 text-blue-600 hover:bg-blue-50">
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar Cambios
+            <Button type="submit" disabled={loading || !selectedChannelId} className="bg-blue-600 hover:bg-blue-700">
+              {loading && <Loader2 className="mr-2 h-2 h-4 w-4 animate-spin" />}
+              Añadir Canal
             </Button>
           </DialogFooter>
         </form>
@@ -518,4 +464,3 @@ export default function EditPropertyChannelModal({
     </Dialog>
   )
 } 
-
