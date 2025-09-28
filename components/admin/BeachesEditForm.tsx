@@ -256,7 +256,7 @@ export function BeachesEditForm({ beaches, guideId, onBeachesChange }: BeachesEd
                 <div className="space-y-2">
                   <Label htmlFor="beach-rating">Calificación</Label>
                   <Select
-                    value={editingBeach.rating.toString()}
+                    value={editingBeach.rating?.toString() || ""}
                     onValueChange={(value) => setEditingBeach({ ...editingBeach, rating: parseFloat(value) })}
                   >
                     <SelectTrigger>

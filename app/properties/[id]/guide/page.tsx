@@ -50,8 +50,13 @@ function GuideEditContent({ params }: GuideEditPageProps) {
   const [activities, setActivities] = useState<any[]>([])
   const [showAddSection, setShowAddSection] = useState(false)
   const [editingSection, setEditingSection] = useState<GuideSection | null>(null)
-  const [newSection, setNewSection] = useState({
-    section_type: "apartment" as const,
+  const [newSection, setNewSection] = useState<{
+    section_type: "apartment" | "rules" | "house_guide" | "tips" | "contact"
+    title: string
+    content: string
+    icon: string
+  }>({
+    section_type: "apartment",
     title: "",
     content: "",
     icon: "fas fa-home"
@@ -109,8 +114,8 @@ function GuideEditContent({ params }: GuideEditPageProps) {
     return sections.some(section => section.section_type === type)
   }
 
-  const getSectionByType = (type: string) => {
-    return sections.find(section => section.section_type === type)
+  const getSectionByType = (type: string): GuideSection | null => {
+    return sections.find(section => section.section_type === type) || null
   }
 
   const handleSectionChange = async (updatedSection: GuideSection) => {
@@ -191,6 +196,7 @@ function GuideEditContent({ params }: GuideEditPageProps) {
           section_type: "apartment",
           title: "",
           content: "",
+          icon: "",
         })
         setShowAddSection(false)
         
@@ -205,8 +211,8 @@ function GuideEditContent({ params }: GuideEditPageProps) {
     setEditingSection(section)
     setNewSection({
       section_type: section.section_type,
-      title: section.title,
-      content: section.content,
+      title: section.title || "",
+      content: section.content || "",
       icon: section.icon || "fas fa-home"
     })
     setShowAddSection(true)
@@ -238,6 +244,7 @@ function GuideEditContent({ params }: GuideEditPageProps) {
           section_type: "apartment",
           title: "",
           content: "",
+          icon: "",
         })
         setShowAddSection(false)
         

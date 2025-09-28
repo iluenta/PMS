@@ -74,7 +74,7 @@ function GuidesContent() {
       
       const { data, error } = await supabase
         .from('properties')
-        .select('id, name, address, description')
+        .select('id, name, address, description, tenant_id, created_at, updated_at')
         .eq('tenant_id', user.tenant_id)
         .order('name')
 

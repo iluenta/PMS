@@ -216,14 +216,16 @@ export default function EditPropertyChannelModal({
           {selectedChannel && (
             <div className="p-4 bg-gray-50 rounded-lg border">
               <div className="flex items-center gap-3 mb-2">
-                {selectedChannel.logo && (
+                {('logo' in selectedChannel && selectedChannel.logo) && (
                   <img 
                     src={selectedChannel.logo} 
-                    alt={selectedChannel.name}
+                    alt={'name' in selectedChannel ? selectedChannel.name : 'Canal'}
                     className="w-8 h-8 object-contain"
                   />
                 )}
-                <span className="font-medium">{selectedChannel.name}</span>
+                <span className="font-medium">
+                  {'name' in selectedChannel ? selectedChannel.name : 'Canal seleccionado'}
+                </span>
               </div>
               <p className="text-sm text-gray-600">
                 Canal seleccionado - Configura los detalles específicos a continuación

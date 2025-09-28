@@ -187,9 +187,7 @@ export class UnifiedStorageService {
       if (error) {
         console.error('Error fetching images:', error)
         console.error('Error details:', {
-          message: error.message,
-          statusCode: error.statusCode,
-          error: error.error
+          message: error.message
         })
         return []
       }

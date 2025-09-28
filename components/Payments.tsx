@@ -1025,9 +1025,47 @@ function PaymentDialog({
   onSave: () => void
 }) {
   const { user } = useAuth()
+  const { selectedProperty } = useProperty()
+  
   // Estado para controlar si mostrar todas las reservas o solo las pendientes
   const [showAllReservations, setShowAllReservations] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(false)
+  const [propertyChannels, setPropertyChannels] = useState<any[]>([])
+
+  // Load property channels when component mounts
+  useEffect(() => {
+    const loadChannels = async () => {
+      if (selectedProperty?.id) {
+        try {
+          const channels = await getActivePropertyChannels(selectedProperty.id)
+          setPropertyChannels(channels)
+        } catch (error) {
+          console.error('Error loading property channels:', error)
+          setPropertyChannels([])
+        }
+      }
+    }
+    
+    loadChannels()
+  }, [selectedProperty?.id])
+
+  // Helper function to get VAT configuration for a reservation
+  const getVatConfig = (reservation: Reservation) => {
+    const bookingSource = (reservation.channel || '').toLowerCase()
+    const matchingChannel = propertyChannels.find(pc => {
+      const channelName = (pc.channel?.name || '').toLowerCase()
+      return channelName && (
+        bookingSource === channelName || 
+        bookingSource.includes(channelName) || 
+        channelName.includes(bookingSource)
+      )
+    })
+    
+    return {
+      applyVat: matchingChannel?.apply_vat ?? true,
+      vatPercent: matchingChannel?.vat_percent ?? 21
+    }
+  }
 
   // Función para manejar el cambio del checkbox
   const handleCheckboxChange = (checked: boolean) => {

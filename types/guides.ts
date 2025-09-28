@@ -1,6 +1,16 @@
 // Tipos para el sistema de guías del viajero
 // Adaptados para TuriGest con multi-tenant
 
+export interface Property {
+  id: string
+  name: string
+  address?: string
+  description?: string
+  tenant_id: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Guide {
   id: string
   tenant_id: number
@@ -54,6 +64,7 @@ export interface Beach {
   image_url?: string
   order_index: number
   created_at: string
+  updated_at?: string
 }
 
 export interface Restaurant {
@@ -69,6 +80,7 @@ export interface Restaurant {
   image_url?: string
   order_index: number
   created_at: string
+  updated_at?: string
 }
 
 export interface Activity {
@@ -83,6 +95,7 @@ export interface Activity {
   image_url?: string
   order_index: number
   created_at: string
+  updated_at?: string
 }
 
 export interface HouseRule {
@@ -94,6 +107,7 @@ export interface HouseRule {
   icon?: string
   order_index: number
   created_at: string
+  updated_at?: string
 }
 
 export interface HouseGuideItem {
@@ -106,6 +120,7 @@ export interface HouseGuideItem {
   icon?: string
   order_index: number
   created_at: string
+  updated_at?: string
 }
 
 export interface Tip {
@@ -170,7 +185,7 @@ export interface GuideData {
   house_rules: HouseRule[]
   house_guide_items: HouseGuideItem[]
   tips: Tip[]
-  contact_info: ContactInfo
+  contact_info: ContactInfo | null
   practical_info: PracticalInfo[]
 }
 

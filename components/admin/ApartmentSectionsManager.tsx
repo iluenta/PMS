@@ -297,11 +297,13 @@ export function ApartmentSectionsManager({ guideId, apartmentSections = [], onDa
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <CompleteIconSelector
-                  value={editingSection.icon}
-                  onChange={(icon) => setEditingSection({ ...editingSection, icon })}
-                  label="Icono"
-                />
+                <div className="space-y-2">
+                  <Label>Icono</Label>
+                  <CompleteIconSelector
+                    value={editingSection.icon}
+                    onChange={(icon) => setEditingSection({ ...editingSection, icon })}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="section-order">Orden</Label>
                   <Input
