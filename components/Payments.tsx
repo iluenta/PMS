@@ -1444,7 +1444,9 @@ Exceso: €${excessAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, ma
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">IVA ({vatPercent}% de comisiones)</Label>
+                <Label className="text-sm font-medium text-gray-700">
+                  {applyVat ? `IVA (${vatPercent}% de comisiones)` : 'IVA (Sin impuesto)'}
+                </Label>
                 <Input
                   value={`€${reservationAmounts.commissionIVA.toFixed(2)}`}
                   readOnly
