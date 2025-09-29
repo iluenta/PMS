@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useProperty } from "@/contexts/PropertyContext"
+import { getActivePropertyChannels } from "@/lib/channels"
 
 export type ReportsDateRange = {
   from: string
@@ -54,25 +55,19 @@ interface ChannelOption {
 }
 
 interface ReportsFiltersProps {
-  channelOptions?: ChannelOption[]
   value?: ReportsFiltersValue
   onApply?: (filters: ReportsFiltersValue) => void
   onReset?: () => void
   onChange?: (filters: ReportsFiltersValue) => void
 }
 
-const DEFAULT_CHANNEL_OPTIONS: ChannelOption[] = [
-  { value: "all", label: "Todos los canales" },
-  { value: "airbnb", label: "Airbnb" },
-  { value: "booking", label: "Booking.com" },
-  { value: "vrbo", label: "VRBO" },
-  { value: "direct", label: "Directo" }
+const BASE_CHANNEL_OPTIONS: ChannelOption[] = [
+  { value: "all", label: "Todos los canales" }
 ]
 
 const DEFAULT_PRESET: ReportsFilterPreset = "this-year"
 
 export function ReportsFilters({
-  channelOptions = DEFAULT_CHANNEL_OPTIONS,
   value,
   onApply,
   onReset,
@@ -80,10 +75,12 @@ export function ReportsFilters({
 }: ReportsFiltersProps) {
   const { selectedProperty, properties } = useProperty()
 
+  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>(BASE_CHANNEL_OPTIONS)
   const [channel, setChannel] = useState<string>(value?.channel ?? "all")
   const [preset, setPreset] = useState<ReportsFilterPreset>(value?.preset ?? DEFAULT_PRESET)
   const [dateRange, setDateRange] = useState<ReportsDateRange>(value?.dateRange ?? PRESET_RANGES[preset]())
   const [scope, setScope] = useState<"current" | "all">(value?.propertyId === "all" ? "all" : "current")
+  const [loadingChannels, setLoadingChannels] = useState(false)
 
   useEffect(() => {
     if (!value) return
@@ -93,6 +90,57 @@ export function ReportsFilters({
     setDateRange(value.dateRange)
     setScope(value.propertyId === "all" ? "all" : "current")
   }, [value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset, value?.propertyId])
+
+  useEffect(() => {
+    const loadChannels = async () => {
+      setLoadingChannels(true)
+      const propertyIds = scope === "all"
+        ? properties.map(property => property.id)
+        : selectedProperty?.id
+          ? [selectedProperty.id]
+          : []
+
+      if (propertyIds.length === 0) {
+        setChannelOptions(BASE_CHANNEL_OPTIONS)
+        setChannel("all")
+        setLoadingChannels(false)
+        return
+      }
+
+      try {
+        const results = await Promise.all(propertyIds.map(id => getActivePropertyChannels(id)))
+        const optionMap = new Map<string, ChannelOption>()
+
+        results.flat().forEach(item => {
+          const name = item.channel?.name?.trim()
+          if (!name) return
+          const key = name.toLowerCase()
+          if (!optionMap.has(key)) {
+            optionMap.set(key, { value: name, label: name })
+          }
+        })
+
+        const mergedOptions = [
+          BASE_CHANNEL_OPTIONS[0],
+          ...Array.from(optionMap.values()).sort((a, b) => a.label.localeCompare(b.label, "es"))
+        ]
+
+        setChannelOptions(mergedOptions)
+
+        if (!mergedOptions.some(option => option.value === channel)) {
+          setChannel("all")
+        }
+      } catch (error) {
+        console.error("Error loading report channels:", error)
+        setChannelOptions(BASE_CHANNEL_OPTIONS)
+        setChannel("all")
+      } finally {
+        setLoadingChannels(false)
+      }
+    }
+
+    loadChannels()
+  }, [properties, selectedProperty?.id, scope, channel])
 
   useEffect(() => {
     const computedPropertyId = scope === "all" ? "all" : selectedProperty?.id
@@ -168,7 +216,7 @@ export function ReportsFilters({
 
           <div className="space-y-2">
             <Label htmlFor="channel">Canal</Label>
-            <Select value={channel} onValueChange={setChannel}>
+            <Select value={channel} onValueChange={setChannel} disabled={loadingChannels || channelOptions.length <= 1}>
               <SelectTrigger id="channel">
                 <SelectValue placeholder="Todos los canales" />
               </SelectTrigger>
