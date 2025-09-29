@@ -21,7 +21,7 @@ export function useReportsOverview({ filters, enabled = true }: UseReportsOvervi
   const { selectedProperty } = useProperty()
 
   const tenantId = user?.tenant_id
-  const propertyId = filters.propertyId ?? selectedProperty?.id
+  const propertyId = filters.propertyId === "all" ? "all" : (filters.propertyId ?? selectedProperty?.id)
   const channel = filters.channel
   const dateFrom = filters.dateRange.from
   const dateTo = filters.dateRange.to

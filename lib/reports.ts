@@ -65,8 +65,18 @@ interface ReservationRow {
   nights: number | null
   total_amount: number | null
   status: string | null
-  booking_source: string | null
   guest: Record<string, any> | null
+  external_source: string | null
+  channel_commission: number | null
+  collection_commission: number | null
+  property_channel?: {
+    id: string
+    apply_vat?: boolean | null
+    vat_percent?: number | null
+    channel?: {
+      name?: string | null
+    } | null
+  } | null
 }
 
 interface PaymentRow {
@@ -129,7 +139,25 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
 
   const reservationsQuery = supabaseServer
     .from<ReservationRow>("reservations")
-    .select("id, property_id, check_in, check_out, nights, total_amount, status, booking_source, guest")
+    .select(`
+      id,
+      property_id,
+      check_in,
+      check_out,
+      nights,
+      total_amount,
+      status,
+      guest,
+      external_source,
+      channel_commission,
+      collection_commission,
+      property_channel:property_channels!reservations_property_channel_fkey (
+        id,
+        apply_vat,
+        vat_percent,
+        channel:distribution_channels ( name )
+      )
+    `)
     .eq("tenant_id", tenantId)
     .gte("check_in", dateFrom)
     .lte("check_in", dateTo)
@@ -180,8 +208,9 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
   let reservations = reservationsResult.data ?? []
   if (channelFilter) {
     reservations = reservations.filter(reservation => {
-      const source = reservation.booking_source ? reservation.booking_source.toLowerCase() : ""
-      return source.includes(channelFilter)
+      const extSource = reservation.external_source ? reservation.external_source.toLowerCase() : ""
+      const channelName = reservation.property_channel?.channel?.name ? reservation.property_channel.channel.name.toLowerCase() : ""
+      return extSource.includes(channelFilter) || channelName.includes(channelFilter)
     })
   }
 
@@ -239,7 +268,9 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
 
   const channelAggregation = new Map<string, { reservations: number; revenue: number }>()
   validReservations.forEach(reservation => {
-    const channelLabel = toTitleCase(normalizeChannel(reservation.booking_source))
+    const channelLabel = reservation.external_source
+      ? toTitleCase(normalizeChannel(reservation.external_source))
+      : toTitleCase(normalizeChannel(reservation.property_channel?.channel?.name))
     const entry = channelAggregation.get(channelLabel) ?? { reservations: 0, revenue: 0 }
     entry.reservations += 1
     entry.revenue += safeNumber(reservation.total_amount)
@@ -366,7 +397,14 @@ async function computePreviousRevenue(options: {
 
   const query = supabaseServer
     .from<ReservationRow>("reservations")
-    .select("total_amount, status, booking_source")
+    .select(`
+      total_amount,
+      status,
+      external_source,
+      property_channel:property_channels!reservations_property_channel_fkey (
+        channel:distribution_channels ( name )
+      )
+    `)
     .eq("tenant_id", options.tenantId)
     .gte("check_in", format(prevFrom, "yyyy-MM-dd"))
     .lte("check_in", format(prevTo, "yyyy-MM-dd"))
@@ -384,8 +422,9 @@ async function computePreviousRevenue(options: {
   const channelFilter = options.channelFilter
   const filtered = channelFilter
     ? (data ?? []).filter(reservation => {
-        const source = reservation.booking_source ? reservation.booking_source.toLowerCase() : ""
-        return source.includes(channelFilter)
+        const extSource = reservation.external_source ? reservation.external_source.toLowerCase() : ""
+        const channelName = reservation.property_channel?.channel?.name ? reservation.property_channel.channel.name.toLowerCase() : ""
+        return extSource.includes(channelFilter) || channelName.includes(channelFilter)
       })
     : (data ?? [])
 

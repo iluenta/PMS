@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useProperty } from "@/contexts/PropertyContext"
 
 export type ReportsDateRange = {
   from: string
@@ -47,18 +48,12 @@ export interface ReportsFiltersValue {
   preset?: ReportsFilterPreset
 }
 
-interface PropertyOption {
-  id: string
-  name: string
-}
-
 interface ChannelOption {
   value: string
   label: string
 }
 
 interface ReportsFiltersProps {
-  propertyOptions?: PropertyOption[]
   channelOptions?: ChannelOption[]
   value?: ReportsFiltersValue
   onApply?: (filters: ReportsFiltersValue) => void
@@ -77,36 +72,38 @@ const DEFAULT_CHANNEL_OPTIONS: ChannelOption[] = [
 const DEFAULT_PRESET: ReportsFilterPreset = "this-year"
 
 export function ReportsFilters({
-  propertyOptions = [],
   channelOptions = DEFAULT_CHANNEL_OPTIONS,
   value,
   onApply,
   onReset,
   onChange
 }: ReportsFiltersProps) {
-  const [propertyId, setPropertyId] = useState<string>(value?.propertyId ?? "all")
+  const { selectedProperty, properties } = useProperty()
+
   const [channel, setChannel] = useState<string>(value?.channel ?? "all")
   const [preset, setPreset] = useState<ReportsFilterPreset>(value?.preset ?? DEFAULT_PRESET)
   const [dateRange, setDateRange] = useState<ReportsDateRange>(value?.dateRange ?? PRESET_RANGES[preset]())
+  const [scope, setScope] = useState<"current" | "all">(value?.propertyId === "all" ? "all" : "current")
 
   useEffect(() => {
     if (!value) return
-    setPropertyId(value.propertyId ?? "all")
     setChannel(value.channel ?? "all")
     const incomingPreset = value.preset ?? "custom"
     setPreset(incomingPreset)
     setDateRange(value.dateRange)
-  }, [value?.propertyId, value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset])
+    setScope(value.propertyId === "all" ? "all" : "current")
+  }, [value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset, value?.propertyId])
 
   useEffect(() => {
+    const computedPropertyId = scope === "all" ? "all" : selectedProperty?.id
     const current: ReportsFiltersValue = {
-      propertyId: propertyId === "all" ? undefined : propertyId,
+      propertyId: computedPropertyId,
       channel: channel === "all" ? undefined : channel,
       dateRange,
       preset
     }
     onChange?.(current)
-  }, [propertyId, channel, preset, dateRange, onChange])
+  }, [scope, selectedProperty?.id, channel, preset, dateRange, onChange])
 
   const summary = useMemo(() => `${dateRange.from} → ${dateRange.to}`, [dateRange])
 
@@ -123,7 +120,7 @@ export function ReportsFilters({
 
   const handleApply = () => {
     const payload: ReportsFiltersValue = {
-      propertyId: propertyId === "all" ? undefined : propertyId,
+      propertyId: scope === "all" ? "all" : selectedProperty?.id,
       channel: channel === "all" ? undefined : channel,
       dateRange,
       preset
@@ -132,38 +129,41 @@ export function ReportsFilters({
   }
 
   const handleReset = () => {
-    setPropertyId("all")
+    setScope("current")
     setChannel("all")
     setPreset(DEFAULT_PRESET)
     const resetRange = PRESET_RANGES[DEFAULT_PRESET]()
     setDateRange(resetRange)
     onReset?.()
-    onApply?.({ propertyId: undefined, channel: undefined, dateRange: resetRange, preset: DEFAULT_PRESET })
+    onApply?.({ propertyId: selectedProperty?.id, channel: undefined, dateRange: resetRange, preset: DEFAULT_PRESET })
   }
 
-  const propertyItems = useMemo(() => {
-    const baseOptions: PropertyOption[] = [{ id: "all", name: "Todas las propiedades" }]
-    return [...baseOptions, ...propertyOptions]
-  }, [propertyOptions])
+  const showScopeSelector = properties.length > 1
+  const selectedPropertyName = selectedProperty?.name ?? "Sin propiedad seleccionada"
 
   return (
     <Card className="p-4 space-y-4">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
-            <Label htmlFor="property">Propiedad</Label>
-            <Select value={propertyId} onValueChange={setPropertyId}>
-              <SelectTrigger id="property">
-                <SelectValue placeholder="Todas las propiedades" />
-              </SelectTrigger>
-              <SelectContent>
-                {propertyItems.map(option => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.name}
+            <Label>Propiedad</Label>
+            {showScopeSelector ? (
+              <Select value={scope} onValueChange={(value) => setScope(value as "current" | "all")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">
+                    {selectedPropertyName}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="all">Consolidado (todas)</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground bg-muted/30">
+                {selectedPropertyName}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

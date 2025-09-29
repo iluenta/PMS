@@ -29,6 +29,25 @@ export async function POST(request: Request) {
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error generating overview report:", error)
+
+    if (process.env.NODE_ENV !== "production") {
+      if (error instanceof Error) {
+        return NextResponse.json({
+          message: "Error generating report",
+          error: {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          }
+        }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        message: "Error generating report",
+        error
+      }, { status: 500 })
+    }
+
     return NextResponse.json({ message: "Error generating report" }, { status: 500 })
   }
 }
