@@ -1,18 +1,25 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const DEFAULT_DATE_RANGE = {
+export type ReportsDateRange = {
+  from: string
+  to: string
+}
+
+export type ReportsFilterPreset = "this-year" | "last-year" | "last-30" | "custom"
+
+const DEFAULT_DATE_RANGE: ReportsDateRange = {
   from: new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10),
   to: new Date().toISOString().slice(0, 10)
 }
 
-const PRESET_RANGES: Record<string, () => { from: string; to: string }> = {
+const PRESET_RANGES: Record<ReportsFilterPreset, () => ReportsDateRange> = {
   "this-year": () => ({
     from: new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10),
     to: new Date().toISOString().slice(0, 10)
@@ -30,46 +37,100 @@ const PRESET_RANGES: Record<string, () => { from: string; to: string }> = {
       to: to.toISOString().slice(0, 10)
     }
   },
-  "custom": () => DEFAULT_DATE_RANGE
+  custom: () => DEFAULT_DATE_RANGE
 }
 
-export function ReportsFilters() {
-  const [propertyId, setPropertyId] = useState<string | undefined>()
-  const [channel, setChannel] = useState<string | undefined>()
-  const [preset, setPreset] = useState<string>("this-year")
-  const [dateRange, setDateRange] = useState(DEFAULT_DATE_RANGE)
+export interface ReportsFiltersValue {
+  propertyId?: string
+  channel?: string
+  dateRange: ReportsDateRange
+  preset?: ReportsFilterPreset
+}
 
-  const summary = useMemo(() => {
-    return `${dateRange.from} → ${dateRange.to}`
-  }, [dateRange])
+interface PropertyOption {
+  id: string
+  name: string
+}
 
-  const handlePresetChange = (value: string) => {
-    setPreset(value)
-    if (value !== "custom") {
-      const range = PRESET_RANGES[value]()
-      setDateRange(range)
+interface ChannelOption {
+  value: string
+  label: string
+}
+
+interface ReportsFiltersProps {
+  propertyOptions?: PropertyOption[]
+  channelOptions?: ChannelOption[]
+  value?: ReportsFiltersValue
+  onApply?: (filters: ReportsFiltersValue) => void
+  onReset?: () => void
+}
+
+const DEFAULT_CHANNEL_OPTIONS: ChannelOption[] = [
+  { value: "all", label: "Todos los canales" },
+  { value: "airbnb", label: "Airbnb" },
+  { value: "booking", label: "Booking.com" },
+  { value: "vrbo", label: "VRBO" },
+  { value: "direct", label: "Directo" }
+]
+
+export function ReportsFilters({
+  propertyOptions = [],
+  channelOptions = DEFAULT_CHANNEL_OPTIONS,
+  value,
+  onApply,
+  onReset
+}: ReportsFiltersProps) {
+  const [propertyId, setPropertyId] = useState<string>(value?.propertyId ?? "all")
+  const [channel, setChannel] = useState<string>(value?.channel ?? "all")
+  const [preset, setPreset] = useState<ReportsFilterPreset>(value?.preset ?? "this-year")
+  const [dateRange, setDateRange] = useState<ReportsDateRange>(value?.dateRange ?? PRESET_RANGES[preset]())
+
+  useEffect(() => {
+    if (!value) return
+    setPropertyId(value.propertyId ?? "all")
+    setChannel(value.channel ?? "all")
+    const incomingPreset = value.preset ?? "custom"
+    setPreset(incomingPreset)
+    setDateRange(value.dateRange)
+  }, [value?.propertyId, value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset])
+
+  const summary = useMemo(() => `${dateRange.from} → ${dateRange.to}`, [dateRange])
+
+  const handlePresetChange = (nextPreset: ReportsFilterPreset) => {
+    setPreset(nextPreset)
+    if (nextPreset !== "custom") {
+      setDateRange(PRESET_RANGES[nextPreset]())
     }
   }
 
-  const handleCustomChange = (field: "from" | "to") => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCustomChange = (field: keyof ReportsDateRange) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setDateRange(prev => ({ ...prev, [field]: event.target.value }))
   }
 
   const handleApply = () => {
-    console.log("Applying filters", {
-      propertyId,
-      channel,
-      dateRange
-    })
-    // TODO: integrate with data store / query params
+    const payload: ReportsFiltersValue = {
+      propertyId: propertyId === "all" ? undefined : propertyId,
+      channel: channel === "all" ? undefined : channel,
+      dateRange,
+      preset
+    }
+    onApply?.(payload)
   }
 
   const handleReset = () => {
-    setPropertyId(undefined)
-    setChannel(undefined)
+    setPropertyId("all")
+    setChannel("all")
     setPreset("this-year")
-    setDateRange(PRESET_RANGES["this-year"]())
+    const resetRange = PRESET_RANGES["this-year"]()
+    setDateRange(resetRange)
+    onReset?.()
+    onApply?.({ propertyId: undefined, channel: undefined, dateRange: resetRange, preset: "this-year" })
   }
+
+  const propertyItems = useMemo(() => {
+    const baseOptions: PropertyOption[] = [{ id: "all", name: "Todas las propiedades" }]
+    return [...baseOptions, ...propertyOptions]
+  }, [propertyOptions])
 
   return (
     <Card className="p-4 space-y-4">
@@ -82,8 +143,11 @@ export function ReportsFilters() {
                 <SelectValue placeholder="Todas las propiedades" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {/* TODO: populate with real properties */}
+                {propertyItems.map(option => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -95,18 +159,18 @@ export function ReportsFilters() {
                 <SelectValue placeholder="Todos los canales" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="airbnb">Airbnb</SelectItem>
-                <SelectItem value="booking">Booking.com</SelectItem>
-                <SelectItem value="vrbo">VRBO</SelectItem>
-                <SelectItem value="direct">Directo</SelectItem>
+                {channelOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="preset">Rango</Label>
-            <Select value={preset} onValueChange={handlePresetChange}>
+            <Select value={preset} onValueChange={(value) => handlePresetChange(value as ReportsFilterPreset)}>
               <SelectTrigger id="preset">
                 <SelectValue />
               </SelectTrigger>
