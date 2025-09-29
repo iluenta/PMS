@@ -63,6 +63,7 @@ interface ReportsFiltersProps {
   value?: ReportsFiltersValue
   onApply?: (filters: ReportsFiltersValue) => void
   onReset?: () => void
+  onChange?: (filters: ReportsFiltersValue) => void
 }
 
 const DEFAULT_CHANNEL_OPTIONS: ChannelOption[] = [
@@ -73,16 +74,19 @@ const DEFAULT_CHANNEL_OPTIONS: ChannelOption[] = [
   { value: "direct", label: "Directo" }
 ]
 
+const DEFAULT_PRESET: ReportsFilterPreset = "this-year"
+
 export function ReportsFilters({
   propertyOptions = [],
   channelOptions = DEFAULT_CHANNEL_OPTIONS,
   value,
   onApply,
-  onReset
+  onReset,
+  onChange
 }: ReportsFiltersProps) {
   const [propertyId, setPropertyId] = useState<string>(value?.propertyId ?? "all")
   const [channel, setChannel] = useState<string>(value?.channel ?? "all")
-  const [preset, setPreset] = useState<ReportsFilterPreset>(value?.preset ?? "this-year")
+  const [preset, setPreset] = useState<ReportsFilterPreset>(value?.preset ?? DEFAULT_PRESET)
   const [dateRange, setDateRange] = useState<ReportsDateRange>(value?.dateRange ?? PRESET_RANGES[preset]())
 
   useEffect(() => {
@@ -93,6 +97,16 @@ export function ReportsFilters({
     setPreset(incomingPreset)
     setDateRange(value.dateRange)
   }, [value?.propertyId, value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset])
+
+  useEffect(() => {
+    const current: ReportsFiltersValue = {
+      propertyId: propertyId === "all" ? undefined : propertyId,
+      channel: channel === "all" ? undefined : channel,
+      dateRange,
+      preset
+    }
+    onChange?.(current)
+  }, [propertyId, channel, preset, dateRange, onChange])
 
   const summary = useMemo(() => `${dateRange.from} → ${dateRange.to}`, [dateRange])
 
@@ -120,11 +134,11 @@ export function ReportsFilters({
   const handleReset = () => {
     setPropertyId("all")
     setChannel("all")
-    setPreset("this-year")
-    const resetRange = PRESET_RANGES["this-year"]()
+    setPreset(DEFAULT_PRESET)
+    const resetRange = PRESET_RANGES[DEFAULT_PRESET]()
     setDateRange(resetRange)
     onReset?.()
-    onApply?.({ propertyId: undefined, channel: undefined, dateRange: resetRange, preset: "this-year" })
+    onApply?.({ propertyId: undefined, channel: undefined, dateRange: resetRange, preset: DEFAULT_PRESET })
   }
 
   const propertyItems = useMemo(() => {

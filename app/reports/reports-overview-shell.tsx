@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { OverviewMetrics } from "@/lib/reports"
+import { OverviewGrid } from "./components/overview/OverviewGrid"
+import { useReportsOverview } from "@/hooks/useReportsOverview"
 
 interface ReportsOverviewShellProps {
   tenantId?: number
@@ -14,6 +15,14 @@ interface ReportsOverviewShellProps {
 }
 
 const DEFAULT_TENANT_ID = 1
+const FALLBACK_DATE_FROM = new Date(new Date().getFullYear(), 0, 1)
+const FALLBACK_DATE_TO = new Date()
+
+function formatISO(date?: string, fallback?: Date) {
+  if (date) return date
+  if (!fallback) return new Date().toISOString().slice(0, 10)
+  return fallback.toISOString().slice(0, 10)
+}
 
 export function ReportsOverviewShell({
   tenantId = DEFAULT_TENANT_ID,
@@ -22,51 +31,18 @@ export function ReportsOverviewShell({
   dateTo,
   channel
 }: ReportsOverviewShellProps) {
-  const [data, setData] = useState<OverviewMetrics | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const parameters = useMemo(() => ({
+    tenantId,
+    propertyId,
+    channel,
+    dateFrom: formatISO(dateFrom, FALLBACK_DATE_FROM),
+    dateTo: formatISO(dateTo, FALLBACK_DATE_TO)
+  }), [tenantId, propertyId, channel, dateFrom, dateTo])
 
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function load() {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const response = await fetch("/api/reports/overview", {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            tenantId,
-            propertyId,
-            dateFrom,
-            dateTo,
-            channel
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`Error fetching report (${response.status})`)
-        }
-
-        const payload = await response.json()
-        setData(payload)
-      } catch (err) {
-        if ((err as any)?.name === "AbortError") return
-        console.error("Error loading report overview", err)
-        setError("No se pudo cargar el resumen. Intenta nuevamente.")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-    return () => controller.abort()
-  }, [tenantId, propertyId, dateFrom, dateTo, channel])
+  const { data, loading, error } = useReportsOverview({
+    ...parameters,
+    enabled: Boolean(tenantId)
+  })
 
   if (loading) {
     return (
@@ -89,7 +65,7 @@ export function ReportsOverviewShell({
         <CardHeader>
           <CardTitle>Resumen de métricas</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-red-500">{error}</CardContent>
+        <CardContent className="text-sm text-destructive">{error}</CardContent>
       </Card>
     )
   }
@@ -98,32 +74,5 @@ export function ReportsOverviewShell({
     return null
   }
 
-  const { finances, operations, bookings } = data
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Resumen de métricas</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Ingresos totales" value={finances.totalRevenue} prefix="€" />
-        <MetricCard label="Gastos" value={finances.expenses} prefix="€" />
-        <MetricCard label="Beneficio neto" value={finances.netIncome} prefix="€" />
-        <MetricCard label="Ocupación" value={operations.occupancyRate} suffix="%" />
-        <MetricCard label="Reservas" value={bookings.total} />
-        <MetricCard label="Cancelaciones" value={bookings.cancellationRate} suffix="%" />
-      </CardContent>
-    </Card>
-  )
-}
-
-function MetricCard({ label, value, prefix, suffix }: { label: string; value: number; prefix?: string; suffix?: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="mt-2 text-3xl font-semibold">
-        {prefix}{value.toLocaleString("es-ES", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}{suffix}
-      </div>
-    </div>
-  )
+  return <OverviewGrid data={data} />
 }
