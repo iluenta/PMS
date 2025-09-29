@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { OverviewFilters, OverviewMetrics } from "@/lib/reports"
+import { useProperty } from "@/contexts/PropertyContext"
+import { useAuth } from "@/contexts/AuthContext"
+import type { ReportsFiltersValue } from "@/app/reports/components/ReportsFilters"
 
 interface UseReportsOverviewOptions {
-  tenantId: number
-  propertyId?: string
-  channel?: string
-  dateFrom: string
-  dateTo: string
+  filters: ReportsFiltersValue
   enabled?: boolean
 }
 
@@ -17,23 +16,34 @@ interface UseReportsOverviewResult {
   refetch: () => Promise<void>
 }
 
-export function useReportsOverview(options: UseReportsOverviewOptions): UseReportsOverviewResult {
-  const { tenantId, propertyId, channel, dateFrom, dateTo, enabled = true } = options
+export function useReportsOverview({ filters, enabled = true }: UseReportsOverviewOptions): UseReportsOverviewResult {
+  const { user } = useAuth()
+  const { selectedProperty } = useProperty()
 
-  const payload: OverviewFilters = useMemo(() => ({
-    tenantId,
-    propertyId,
-    channel,
-    dateFrom,
-    dateTo
-  }), [tenantId, propertyId, channel, dateFrom, dateTo])
+  const tenantId = user?.tenant_id
+  const propertyId = filters.propertyId ?? selectedProperty?.id
+  const channel = filters.channel
+  const dateFrom = filters.dateRange.from
+  const dateTo = filters.dateRange.to
+
+  const payload: OverviewFilters | null = useMemo(() => {
+    if (!tenantId) return null
+
+    return {
+      tenantId,
+      propertyId,
+      channel,
+      dateFrom,
+      dateTo
+    }
+  }, [tenantId, propertyId, channel, dateFrom, dateTo])
 
   const [data, setData] = useState<OverviewMetrics | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchOverview = useCallback(async (signal?: AbortSignal) => {
-    if (!enabled) return
+    if (!enabled || !payload) return
 
     setLoading(true)
     setError(null)
@@ -64,12 +74,14 @@ export function useReportsOverview(options: UseReportsOverviewOptions): UseRepor
   }, [enabled, payload])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !payload) {
+      return
+    }
 
     const controller = new AbortController()
     fetchOverview(controller.signal)
     return () => controller.abort()
-  }, [enabled, fetchOverview])
+  }, [enabled, payload, fetchOverview])
 
   const refetch = useCallback(async () => {
     await fetchOverview()

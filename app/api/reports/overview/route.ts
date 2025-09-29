@@ -4,7 +4,7 @@ import { getOverviewMetrics } from "@/lib/reports"
 
 const requestSchema = z.object({
   tenantId: z.number().int().positive(),
-  propertyId: z.string().uuid().optional(),
+  propertyId: z.string().optional(),
   dateFrom: z.string(),
   dateTo: z.string(),
   channel: z.string().optional()
@@ -12,8 +12,19 @@ const requestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const params = requestSchema.parse(body)
+    const rawBody = await request.text()
+    if (!rawBody) {
+      return NextResponse.json({ message: "Request body is required" }, { status: 400 })
+    }
+
+    let parsedBody: unknown
+    try {
+      parsedBody = JSON.parse(rawBody)
+    } catch (parseError) {
+      return NextResponse.json({ message: "Invalid JSON payload" }, { status: 400 })
+    }
+
+    const params = requestSchema.parse(parsedBody)
     const data = await getOverviewMetrics(params)
     return NextResponse.json(data)
   } catch (error) {
