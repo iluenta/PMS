@@ -57,6 +57,12 @@ import { GuestPicker } from '@/components/people/GuestPicker'
 import { ReservationStatusSelect } from '@/components/ui/reservation-status'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/utils'
+import {
+  calculateReservationAmountsWithVat,
+  getReservationPaymentSummary,
+  getVatConfigFromReservation,
+  VatConfig
+} from "@/lib/utils/financial"
 
 export default function Bookings() {
 
@@ -137,11 +143,6 @@ export default function Bookings() {
   // Filtered and sorted bookings
   const filteredBookings = useMemo(() => {
     let filtered = [...bookings]
-
-    // Filter by selected property (global context)
-    if (selectedProperty) {
-      filtered = filtered.filter((booking) => booking.property_id === selectedProperty.id)
-    }
 
     // Search filter (name, email, property)
     if (searchTerm.trim()) {
@@ -550,7 +551,6 @@ export default function Bookings() {
 
   // Función unificada para calcular el importe requerido y estado del pago
   const calculatePaymentInfo = (booking: Booking, payments: any[] = []) => {
-    // Convertir Booking a Reservation para usar las funciones comunes
     const reservation: Reservation = {
       id: booking.id || '',
       guest: booking.guest ? {
@@ -574,54 +574,32 @@ export default function Bookings() {
       channel: booking.booking_source,
       notes: booking.notes || '',
       special_requests: booking.special_requests || '',
-      external_id: (booking as any).external_id || '',
-      external_source: booking.booking_source || '',
-      ical_uid: '',
+      external_id: booking.external_id || undefined,
+      external_source: booking.booking_source,
+      ical_uid: undefined,
       channel_commission: booking.channel_commission || 0,
       collection_commission: booking.collection_commission || 0,
-      property_channel_id: '',
+      property_channel_id: booking.property_channel_id || '',
       created_at: booking.created_at,
       updated_at: booking.updated_at,
       property: booking.property,
-      property_channel: undefined
+      property_channel: booking.property_channel,
     }
 
-    // Buscar configuración de IVA del canal
-    const bookingSource = (booking.booking_source || '').toLowerCase()
-    const matchingChannel = propertyChannels.find(pc => {
-      const channelName = (pc.channel?.name || '').toLowerCase()
-      return channelName && (
-        bookingSource === channelName || 
-        bookingSource.includes(channelName) || 
-        channelName.includes(bookingSource)
-      )
-    })
-
-    // Usar configuración de IVA del canal o valores por defecto
-    const applyVat = matchingChannel?.apply_vat ?? true
-    const vatPercent = matchingChannel?.vat_percent ?? 21
-
-    // Calcular importe requerido usando la configuración de IVA del canal
-    const requiredAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
-    const completedPayments = (payments || []).filter(p => p?.status === 'completed')
-    const totalPayments = completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
-    const pendingAmount = Math.round((requiredAmount - totalPayments) * 100) / 100
-
-    // Derivar el estado del pago usando exactamente los mismos valores mostrados
-    let paymentStatus = 'pending'
-    if (requiredAmount <= 0 || pendingAmount <= 0) paymentStatus = 'paid'
-    else if (totalPayments > 0) paymentStatus = 'partial'
+    const vatConfig = getVatConfigFromReservation(reservation)
+    const summary = getReservationPaymentSummary(reservation, payments, vatConfig)
+    const amounts = calculateReservationAmountsWithVat(reservation, vatConfig)
 
     return {
-      requiredAmount,
-      paymentStatus,
-      totalPayments,
-      pendingAmount: Math.max(0, pendingAmount),
+      requiredAmount: summary.requiredAmount,
+      paymentStatus: summary.status,
+      totalPayments: summary.totalPaid,
+      pendingAmount: summary.pendingAmount,
       vatInfo: {
-        applyVat,
-        vatPercent,
-        vatAmount: applyVat ? Math.round(((reservation.channel_commission || 0) + (reservation.collection_commission || 0)) * (vatPercent / 100) * 100) / 100 : 0
-      }
+        applyVat: vatConfig.applyVat,
+        vatPercent: vatConfig.vatPercent,
+        vatAmount: amounts.vatAmount,
+      },
     }
   }
 

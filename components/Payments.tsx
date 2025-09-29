@@ -19,13 +19,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   supabase,
   type Payment,
-  type Reservation,
-  calculateRequiredAmount,
-  calculateRequiredAmountWithVat,
-  calculateReservationAmounts,
-  calculateReservationAmountsWithVat,
-  calculatePaymentStatus,
+  type Reservation
 } from "@/lib/supabase"
+import {
+  calculateRequiredAmountWithVat,
+  calculateReservationAmountsWithVat,
+  getReservationPaymentSummary,
+  calculatePaymentStatus,
+  getVatConfigFromReservation
+} from "@/lib/utils/financial"
 import { getActivePropertyChannels } from "@/lib/channels"
 import { useProperty } from "@/hooks/useProperty"
 import { useAuth } from "@/contexts/AuthContext"
@@ -255,37 +257,28 @@ export default function Payments() {
 
   // Función para calcular el progreso de pago de una reserva (solo pagos completados)
   const getReservationPaymentProgress = (reservationId: string) => {
-    const reservationPayments = payments.filter(p => p.reservation_id === reservationId && p.status === 'completed')
-    const totalPaid = reservationPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
     const reservation = reservations.find(r => r.id === reservationId)
-    
+    const relatedPayments = payments.filter(p => p.reservation_id === reservationId && p.status === "completed")
+
     if (!reservation) {
-      console.log(`❌ No se encontró la reserva ${reservationId}`)
-      return { totalPaid, totalAmount: 0, percentage: 0 }
+      return {
+        totalPaid: 0,
+        totalAmount: 0,
+        percentage: 0,
+      }
     }
-    
-    // Usar calculateRequiredAmountWithVat con configuración del canal
-    const { applyVat, vatPercent } = getVatConfig(reservation)
-    const totalAmount = calculateRequiredAmountWithVat(reservation, vatPercent, applyVat)
-    
-    // Si el importe requerido es €0, considerar como pagado al 100%
-    let percentage = 0
-    if (totalAmount === 0) {
-      percentage = 100 // Reservas de €0 se consideran pagadas al 100%
-    } else {
-      percentage = (totalPaid / totalAmount) * 100
-    }
-    
-    console.log(`💰 Reserva ${reservation.guest?.name}:`)
-    console.log(`  - Pagos completados: ${reservationPayments.length}`)
-    console.log(`  - Total pagado: €${totalPaid}`)
-    console.log(`  - Total requerido: €${totalAmount}`)
-    console.log(`  - Porcentaje: ${percentage}%`)
-    
-    return { 
-      totalPaid, 
-      totalAmount, 
-      percentage
+
+    const vatConfig = getVatConfig(reservation)
+    const summary = getReservationPaymentSummary(reservation, relatedPayments, vatConfig)
+
+    const percentage = summary.requiredAmount > 0
+      ? Math.min(100, Math.round((summary.totalPaid / summary.requiredAmount) * 100))
+      : 100
+
+    return {
+      totalPaid: summary.totalPaid,
+      totalAmount: summary.requiredAmount,
+      percentage,
     }
   }
 
@@ -442,92 +435,57 @@ export default function Payments() {
       })
     }
 
-    // Aplicar filtro de canal a reservas
-    if (channelFilter !== "all") {
-      list = list.filter(r => {
-        const source = (r as any).external_source || "Direct"
-        const normalizedSource = source === "Direct" ? "Propio" : source
-        return normalizedSource === channelFilter
-      })
-    }
-
-    // Aplicar filtro de fecha a reservas (basado en check_in)
     if (dateRangeFilter !== "all") {
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
       list = list.filter(r => {
-        const d = r.check_in ? new Date(r.check_in) : null
-        if (!d) return false
-        const daysDiff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        const date = new Date(r.check_in)
         switch (dateRangeFilter) {
           case "pending":
-            return d > today
+            return date > today
           case "today":
-            return daysDiff === 0
+            return date.toDateString() === today.toDateString()
           case "this_week":
-            return daysDiff >= 0 && daysDiff <= 7
+            return date >= today && (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24) <= 7
           case "this_month":
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+            return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
           case "past":
-            return d < today
+            return date < today
           default:
             return true
         }
       })
     }
 
-    // Aplicar filtro de año a reservas (basado en check_in)
-    if (yearFilter !== "all") {
-      list = list.filter(r => isDateInYear(r.check_in, yearFilter))
-    }
-
     return list
-  }, [reservations, searchTerm, channelFilter, dateRangeFilter, yearFilter])
+  }, [reservations, searchTerm, dateRangeFilter])
 
-  // Calcular estadísticas basadas en los filtros aplicados
-  const paymentStatistics = useMemo(() => {
-    // 1. Importe total de pagos completados (ajustado a filtros)
+  const totals = useMemo(() => {
     const totalCompletedPayments = filteredPayments
       .filter(p => p.status === 'completed')
       .reduce((sum, p) => sum + (p.amount || 0), 0)
 
-    // 2. Importe total de pagos pendientes + importe pendiente de reservas
     const totalPendingPayments = filteredPayments
       .filter(p => p.status === 'pending')
       .reduce((sum, p) => sum + (p.amount || 0), 0)
 
-    // Calcular importe pendiente de reservas filtradas
     const totalPendingReservations = getFilteredReservations
-      .filter(r => r.property_id === selectedProperty?.id)
       .reduce((sum, r) => {
         const progress = getReservationPaymentProgress(r.id)
-        
-        // Usar el total_amount real de la reserva para el cálculo del pendiente
-        // calculateRequiredAmount puede incluir comisiones que no son relevantes aquí
-        const reservationTotal = r.total_amount || 0
         const pendingAmount = Math.max(0, progress.totalAmount - progress.totalPaid)
-        
-        // Log de debug para identificar el problema
-        console.log(`🔍 Debug Reserva ${r.guest?.name}:`)
-        console.log(`  - total_amount de BD: €${r.total_amount}`)
-        console.log(`  - calculateRequiredAmount: €${progress.totalAmount}`)
-        console.log(`  - totalPaid: €${progress.totalPaid}`)
-        console.log(`  - pendingAmount calculado: €${pendingAmount}`)
-        
         return sum + pendingAmount
       }, 0)
 
     const totalPendingAmount = Math.max(totalPendingPayments, totalPendingReservations)
 
-    // 3. Importe total de reservas confirmadas sin pago asociado
     const totalConfirmedWithoutPayment = getFilteredReservations
-      .filter(r => r.property_id === selectedProperty?.id && r.status === 'confirmed')
+      .filter(r => r.status === 'confirmed')
       .reduce((sum, r) => {
-        // Verificar si la reserva tiene algún pago asociado
         const hasPayments = payments.some(p => p.reservation_id === r.id)
         if (!hasPayments) {
-          const { applyVat, vatPercent } = getVatConfig(r)
-          const requiredAmount = calculateRequiredAmountWithVat(r, vatPercent, applyVat)
+          const vatConfig = getVatConfig(r)
+          const requiredAmount = calculateRequiredAmountWithVat(r, vatConfig)
           return sum + requiredAmount
         }
         return sum
@@ -538,7 +496,7 @@ export default function Payments() {
       totalPendingAmount,
       totalConfirmedWithoutPayment
     }
-  }, [filteredPayments, getFilteredReservations, selectedProperty?.id, payments])
+  }, [filteredPayments, getFilteredReservations, payments])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -679,7 +637,7 @@ export default function Payments() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Pagos Completados</p>
                     <p className="text-2xl font-bold text-green-600">
-                      €{paymentStatistics.totalCompletedPayments.toFixed(2)}
+                      €{totals.totalCompletedPayments.toFixed(2)}
                     </p>
                   </div>
                   <CheckCircle className="h-8 w-8 text-green-500" />
@@ -694,7 +652,7 @@ export default function Payments() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Pagos Pendientes</p>
                     <p className="text-2xl font-bold text-yellow-600">
-                      €{paymentStatistics.totalPendingAmount.toFixed(2)}
+                      €{totals.totalPendingAmount.toFixed(2)}
                     </p>
                     <p className="text-xs text-gray-500">
                       Incluye pagos pendientes + importe pendiente de reservas
@@ -712,7 +670,7 @@ export default function Payments() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Reservas Sin Pago</p>
                     <p className="text-2xl font-bold text-blue-600">
-                      €{paymentStatistics.totalConfirmedWithoutPayment.toFixed(2)}
+                      €{totals.totalConfirmedWithoutPayment.toFixed(2)}
                     </p>
                     <p className="text-xs text-gray-500">
                       Reservas confirmadas sin pago asociado

@@ -3,10 +3,12 @@ import { supabase, type Expense, type Property, type Reservation } from "@/lib/s
 import { getExpenseCategories, getExpenseSubcategories } from "@/lib/expenses"
 import { type ExpenseCategory, type ExpenseSubcategory, type ExpenseWithJoins } from "@/types/expenses"
 import { useProperty } from "@/contexts/PropertyContext"
+import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
 
 export function usePropertyExpensesData() {
   const { selectedProperty } = useProperty()
+  const { user } = useAuth()
   const { toast } = useToast()
   
   // Estados principales de datos
@@ -21,7 +23,7 @@ export function usePropertyExpensesData() {
 
   // Función principal de fetch de datos
   const fetchData = async () => {
-    if (!selectedProperty) return
+    if (!selectedProperty || !user?.tenant_id) return
 
     try {
       setLoading(true)
@@ -33,6 +35,7 @@ export function usePropertyExpensesData() {
         .from('expenses')
         .select('*')
         .eq('property_id', selectedProperty.id)
+        .eq('tenant_id', user.tenant_id)
         .order('date', { ascending: false })
 
       
@@ -55,6 +58,7 @@ export function usePropertyExpensesData() {
         .from('reservations')
         .select('*')
         .eq('property_id', selectedProperty.id)
+        .eq('tenant_id', user.tenant_id)
 
       console.log('Reservations data:', reservationsData)
 
@@ -113,12 +117,13 @@ export function usePropertyExpensesData() {
 
   // CRUD Operations
   const createExpense = async (expenseData: Partial<Expense>) => {
-    if (!selectedProperty?.id) return null
+    if (!selectedProperty?.id || !user?.tenant_id) return null
 
     try {
       // Convertir strings vacíos a null para campos UUID
       const newExpense = {
         ...expenseData,
+        tenant_id: user.tenant_id,
         property_id: selectedProperty.id,
         category_id: expenseData.category_id || null,
         subcategory_id: expenseData.subcategory_id === "" || expenseData.subcategory_id === "none" ? null : expenseData.subcategory_id,
@@ -137,6 +142,9 @@ export function usePropertyExpensesData() {
       return data[0]
     } catch (error) {
       console.error('Error creating expense:', error)
+      if (error instanceof Error) {
+        console.error('Detailed error message:', error.message)
+      }
       toast({
         title: "Error",
         description: "Error al crear el gasto",
