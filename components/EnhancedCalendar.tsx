@@ -14,9 +14,10 @@ interface CalendarBooking {
   property_name: string
   total_amount: number
   status: string
+  reservation_type?: string | null
 }
 
-type DayStatus = 'available' | 'reserved' | 'pending' | 'closed'
+type DayStatus = 'available' | 'reserved' | 'owner' | 'blocked' | 'pending'
 
 interface DayInfo {
   date: Date
@@ -75,7 +76,8 @@ export default function EnhancedCalendar() {
         check_out: new Date(reservation.check_out),
         property_name: selectedProperty?.name || "Propiedad desconocida",
         total_amount: reservation.total_amount || 0,
-        status: reservation.status || "pending"
+        status: reservation.status || "pending",
+        reservation_type: reservation.reservation_type || null
       }))
 
       setBookings(calendarBookings)
@@ -141,7 +143,16 @@ export default function EnhancedCalendar() {
 
     if (bookingsForDate.length > 0) {
       const booking = bookingsForDate[0]
-      status = booking.status === 'confirmed' ? 'reserved' : 'pending'
+
+      if (booking.reservation_type === 'owner_stay') {
+        status = 'owner'
+      } else if (booking.reservation_type === 'blocked') {
+        status = 'blocked'
+      } else if (booking.status === 'confirmed') {
+        status = 'reserved'
+      } else {
+        status = 'pending'
+      }
       guestName = booking.guest_name
       
       // Calcular precio por noche para la reserva
@@ -171,8 +182,6 @@ export default function EnhancedCalendar() {
           checkOutGuestName = booking.guest_name
         }
       }
-    } else if (isWeekend) {
-      status = 'closed'
     }
 
     return {
@@ -194,12 +203,13 @@ export default function EnhancedCalendar() {
         return 'bg-green-50 border-green-200'
       case 'reserved':
         return 'bg-blue-50 border-blue-200'
-      case 'pending':
-        return 'bg-yellow-50 border-yellow-200'
-      case 'closed':
+      case 'owner':
+        return 'bg-orange-50 border-orange-200'
+      case 'blocked':
         return 'bg-red-50 border-red-200'
+      case 'pending':
       default:
-        return 'bg-white border-gray-200'
+        return 'bg-yellow-50 border-yellow-200'
     }
   }
 
@@ -339,15 +349,19 @@ export default function EnhancedCalendar() {
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-blue-50 border border-blue-200 rounded"></div>
-              <span className="text-xs text-gray-600">Reservado</span>
+              <span className="text-xs text-gray-600">Reservado (comercial)</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-orange-50 border border-orange-200 rounded"></div>
+              <span className="text-xs text-gray-600">Uso propietario</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
+              <span className="text-xs text-gray-600">Bloqueo</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-yellow-50 border border-yellow-200 rounded"></div>
               <span className="text-xs text-gray-600">Pendiente</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
-              <span className="text-xs text-gray-600">Cerrado</span>
             </div>
           </div>
         </div>

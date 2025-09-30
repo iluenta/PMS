@@ -357,6 +357,31 @@ export async function getReservationStatuses(): Promise<Array<{ name: string; co
   }
 }
 
+export async function getReservationTypes(): Promise<string[]> {
+  try {
+    const setting = await getSettingByKey('reservation_types')
+    if (!setting) {
+      console.warn('⚠️ Configuración "reservation_types" no encontrada. Usando valores por defecto.')
+      return ['commercial', 'owner_stay', 'blocked']
+    }
+
+    if (setting.config_type === 'simple_list') {
+      const values = getSimpleListValue(setting)
+      return values.length > 0 ? values : ['commercial', 'owner_stay', 'blocked']
+    }
+
+    if (setting.config_type === 'colored_list') {
+      const values = getColoredListValue(setting).map(item => item.name)
+      return values.length > 0 ? values : ['commercial', 'owner_stay', 'blocked']
+    }
+
+    throw new Error('La configuración reservation_types debe ser simple_list o colored_list')
+  } catch (error) {
+    console.error('💥 Error obteniendo tipos de reserva:', error)
+    return ['commercial', 'owner_stay', 'blocked']
+  }
+}
+
 /**
  * Obtiene los tipos de propiedad desde la configuración
  */

@@ -23,6 +23,7 @@ export function useReportsOverview({ filters, enabled = true }: UseReportsOvervi
   const tenantId = user?.tenant_id
   const propertyId = filters.propertyId === "all" ? "all" : (filters.propertyId ?? selectedProperty?.id)
   const channel = filters.channel
+  const reservationType = filters.reservationType
   const dateFrom = filters.dateRange.from
   const dateTo = filters.dateRange.to
 
@@ -33,10 +34,11 @@ export function useReportsOverview({ filters, enabled = true }: UseReportsOvervi
       tenantId,
       propertyId,
       channel,
+      reservationType,
       dateFrom,
       dateTo
     }
-  }, [tenantId, propertyId, channel, dateFrom, dateTo])
+  }, [tenantId, propertyId, channel, reservationType, dateFrom, dateTo])
 
   const [data, setData] = useState<OverviewMetrics | null>(null)
   const [loading, setLoading] = useState<boolean>(false)

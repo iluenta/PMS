@@ -7,7 +7,8 @@ const requestSchema = z.object({
   propertyId: z.string().optional(),
   dateFrom: z.string(),
   dateTo: z.string(),
-  channel: z.string().optional()
+  channel: z.string().optional(),
+  reservationType: z.string().optional()
 })
 
 export async function POST(request: Request) {

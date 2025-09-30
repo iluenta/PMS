@@ -8,6 +8,7 @@ export interface OverviewFilters {
   dateFrom: string
   dateTo: string
   channel?: string
+  reservationType?: string
 }
 
 export interface OverviewMetrics {
@@ -69,6 +70,7 @@ interface ReservationRow {
   external_source: string | null
   channel_commission: number | null
   collection_commission: number | null
+  reservation_type: string | null
   property_channel?: {
     id: string
     apply_vat?: boolean | null
@@ -128,7 +130,7 @@ function safeNumber(value: number | null | undefined): number {
 }
 
 export async function getOverviewMetrics(filters: OverviewFilters): Promise<OverviewMetrics> {
-  const { tenantId, propertyId, dateFrom, dateTo, channel } = filters
+  const { tenantId, propertyId, dateFrom, dateTo, channel, reservationType } = filters
 
   const fromDate = parseDate(dateFrom)
   const toDate = parseDate(dateTo)
@@ -136,6 +138,7 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
 
   const channelFilter = channel && channel !== "all" ? channel.toLowerCase() : undefined
   const propertyFilter = propertyId && propertyId !== "all" ? propertyId : undefined
+  const reservationTypeFilter = reservationType && reservationType !== "all" ? reservationType : undefined
 
   const reservationsQuery = supabaseServer
     .from<ReservationRow>("reservations")
@@ -151,6 +154,7 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
       external_source,
       channel_commission,
       collection_commission,
+      reservation_type,
       property_channel:property_channels!reservations_property_channel_fkey (
         id,
         apply_vat,
@@ -233,7 +237,16 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
     payment.reservation_id !== null && reservationsMap.has(payment.reservation_id)
   )
 
-  const validReservations = reservations.filter(reservation => reservation.status !== "cancelled")
+  const validReservations = reservations.filter(reservation => {
+    if (reservation.status === "cancelled") return false
+    if (reservationTypeFilter) {
+      return reservation.reservation_type === reservationTypeFilter
+    }
+    if (reservation.reservation_type && reservation.reservation_type !== "commercial") {
+      return false
+    }
+    return true
+  })
   const cancelledReservations = reservations.length - validReservations.length
 
   const nightsBooked = validReservations.reduce((total, reservation) => {
@@ -326,7 +339,8 @@ export async function getOverviewMetrics(filters: OverviewFilters): Promise<Over
     propertyId: propertyFilter,
     from: fromDate,
     days,
-    channelFilter
+    channelFilter,
+    reservationType: reservationTypeFilter
   })
 
   const monthOverMonthChange = previousRevenue > 0
@@ -391,6 +405,7 @@ async function computePreviousRevenue(options: {
   from: Date
   days: number
   channelFilter?: string
+  reservationType?: string
 }): Promise<number> {
   const prevTo = addDays(options.from, -1)
   const prevFrom = addDays(prevTo, -(options.days - 1))
@@ -400,6 +415,7 @@ async function computePreviousRevenue(options: {
     .select(`
       total_amount,
       status,
+      reservation_type,
       external_source,
       property_channel:property_channels!reservations_property_channel_fkey (
         channel:distribution_channels ( name )
@@ -430,5 +446,11 @@ async function computePreviousRevenue(options: {
 
   return filtered
     .filter(reservation => reservation.status !== "cancelled")
+    .filter(reservation => {
+      if (options.reservationType && options.reservationType !== "all") {
+        return reservation.reservation_type === options.reservationType
+      }
+      return !reservation.reservation_type || reservation.reservation_type === "commercial"
+    })
     .reduce((total, reservation) => total + safeNumber(reservation.total_amount), 0)
 }

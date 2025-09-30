@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 const DEFAULT_FILTERS: ReportsFiltersValue = {
   propertyId: undefined,
   channel: undefined,
+  reservationType: "commercial",
   preset: "this-year",
   dateRange: {
     from: new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10),

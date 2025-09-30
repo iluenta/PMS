@@ -22,6 +22,16 @@ interface AvailabilityPeriod {
   reason?: string
 }
 
+type BlockingReservationType = "commercial" | "owner_stay" | "blocked"
+
+interface BlockingReservation {
+  start: Date
+  end: Date
+  guest: string
+  type: BlockingReservationType
+  status: string
+}
+
 export default function AvailabilityList() {
   const { selectedProperty } = useProperty()
   const [availabilityPeriods, setAvailabilityPeriods] = useState<AvailabilityPeriod[]>([])
@@ -48,7 +58,6 @@ export default function AvailabilityList() {
         .from("reservations")
         .select("*")
         .eq("property_id", selectedProperty.id)
-        .eq("status", "confirmed")
 
       if (error) throw error
 
@@ -59,23 +68,55 @@ export default function AvailabilityList() {
       const endDate = new Date(currentYear, 11, 31) // 31 de diciembre del año actual
 
       // Ordenar reservas por fecha de check-in
-      const sortedReservations = reservations
-        .map(r => ({
-          start: new Date(r.check_in),
-          end: new Date(r.check_out),
-          guest: r.guest?.name || "Sin nombre"
+      const sortedReservations: BlockingReservation[] = reservations
+        .map(reservation => ({
+          start: new Date(reservation.check_in),
+          end: new Date(reservation.check_out),
+          guest: reservation.guest?.name || "Sin nombre",
+          type: (reservation.reservation_type as BlockingReservationType) || "commercial",
+          status: reservation.status || "pending"
         }))
         .sort((a, b) => a.start.getTime() - b.start.getTime())
 
       // Función para verificar si una fecha está disponible
+      const isBlockingReservation = (reservation: BlockingReservation) => {
+        if (reservation.type === "owner_stay" || reservation.type === "blocked") {
+          return true
+        }
+
+        if (reservation.type === "commercial") {
+          return reservation.status !== "pending"
+        }
+
+        return false
+      }
+
+      const statusForDate = (date: Date): "blocking" | "pending" | "available" => {
+        const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+        const blockingReservation = sortedReservations.find(reservation => {
+          const reservationStart = new Date(reservation.start.getFullYear(), reservation.start.getMonth(), reservation.start.getDate())
+          const reservationEnd = new Date(reservation.end.getFullYear(), reservation.end.getMonth(), reservation.end.getDate())
+          return normalized >= reservationStart && normalized < reservationEnd && isBlockingReservation(reservation)
+        })
+
+        if (blockingReservation) return "blocking"
+
+        const pendingReservation = reservations.find(reservation => {
+          if (reservation.status !== "pending") return false
+          const reservationStart = new Date(reservation.check_in)
+          const reservationEnd = new Date(reservation.check_out)
+          return normalized >= reservationStart && normalized < reservationEnd
+        })
+
+        if (pendingReservation) return "pending"
+
+        return "available"
+      }
+
       const isDateAvailable = (date: Date): boolean => {
         if (date < today) return false
-        
-        return !sortedReservations.some(reservation => {
-          const reservationStart = new Date(reservation.start)
-          const reservationEnd = new Date(reservation.end)
-          return date >= reservationStart && date < reservationEnd
-        })
+        return statusForDate(date) === "available"
       }
 
       // Función para agrupar fechas consecutivas
@@ -145,10 +186,10 @@ export default function AvailabilityList() {
         for (let day = 0; day < totalDays; day++) {
           const testDate = new Date(startDate)
           testDate.setDate(testDate.getDate() + day)
-          if (!isDateAvailable(testDate)) {
-            isPeriodAvailable = false
-            break
-          }
+        if (statusForDate(testDate) !== "available") {
+          isPeriodAvailable = false
+          break
+        }
         }
         
         return {

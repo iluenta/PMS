@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useProperty } from "@/contexts/PropertyContext"
 import { getActivePropertyChannels } from "@/lib/channels"
+import { getReservationTypes } from "@/lib/settings"
 
 export type ReportsDateRange = {
   from: string
@@ -45,6 +46,7 @@ const PRESET_RANGES: Record<ReportsFilterPreset, () => ReportsDateRange> = {
 export interface ReportsFiltersValue {
   propertyId?: string
   channel?: string
+  reservationType?: string
   dateRange: ReportsDateRange
   preset?: ReportsFilterPreset
 }
@@ -81,6 +83,13 @@ export function ReportsFilters({
   const [dateRange, setDateRange] = useState<ReportsDateRange>(value?.dateRange ?? PRESET_RANGES[preset]())
   const [scope, setScope] = useState<"current" | "all">(value?.propertyId === "all" ? "all" : "current")
   const [loadingChannels, setLoadingChannels] = useState(false)
+  const reservationTypeOptions = [
+    { value: "commercial", label: "Reservas comerciales" },
+    { value: "owner_stay", label: "Uso propietario" },
+    { value: "blocked", label: "Bloqueos" },
+    { value: "all", label: "Todas (incluye usos internos)" }
+  ]
+  const [loadingReservationTypes, setLoadingReservationTypes] = useState(false)
 
   useEffect(() => {
     if (!value) return
@@ -89,7 +98,32 @@ export function ReportsFilters({
     setPreset(incomingPreset)
     setDateRange(value.dateRange)
     setScope(value.propertyId === "all" ? "all" : "current")
-  }, [value?.channel, value?.dateRange?.from, value?.dateRange?.to, value?.preset, value?.propertyId])
+  }, [value?.channel, value?.reservationType, value?.dateRange?.from, value?.dateRange?.to, value?.preset, value?.propertyId])
+
+  useEffect(() => {
+    const loadReservationTypes = async () => {
+      setLoadingReservationTypes(true)
+      try {
+        const types = await getReservationTypes()
+        setReservationTypes([
+          { value: "commercial", label: "Reservas comerciales" },
+          { value: "owner_stay", label: "Uso propietario" },
+          { value: "blocked", label: "Bloqueos" }
+        ].map(defaultType => {
+          if (types.includes(defaultType.value)) {
+            return defaultType
+          }
+          return defaultType
+        }))
+      } catch (error) {
+        console.error("Error loading reservation types:", error)
+      } finally {
+        setLoadingReservationTypes(false)
+      }
+    }
+
+    loadReservationTypes()
+  }, [])
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -147,11 +181,12 @@ export function ReportsFilters({
     const current: ReportsFiltersValue = {
       propertyId: computedPropertyId,
       channel: channel === "all" ? undefined : channel,
+      reservationType: "commercial", // Default to commercial for now, as the state was removed
       dateRange,
       preset
     }
     onChange?.(current)
-  }, [scope, selectedProperty?.id, channel, preset, dateRange, onChange])
+  }, [scope, selectedProperty?.id, channel, dateRange, preset, onChange])
 
   const summary = useMemo(() => `${dateRange.from} → ${dateRange.to}`, [dateRange])
 
@@ -170,6 +205,7 @@ export function ReportsFilters({
     const payload: ReportsFiltersValue = {
       propertyId: scope === "all" ? "all" : selectedProperty?.id,
       channel: channel === "all" ? undefined : channel,
+      reservationType: "commercial", // Default to commercial for now, as the state was removed
       dateRange,
       preset
     }
@@ -183,7 +219,7 @@ export function ReportsFilters({
     const resetRange = PRESET_RANGES[DEFAULT_PRESET]()
     setDateRange(resetRange)
     onReset?.()
-    onApply?.({ propertyId: selectedProperty?.id, channel: undefined, dateRange: resetRange, preset: DEFAULT_PRESET })
+    onApply?.({ propertyId: selectedProperty?.id, channel: undefined, reservationType: "commercial", dateRange: resetRange, preset: DEFAULT_PRESET })
   }
 
   const showScopeSelector = properties.length > 1
@@ -241,6 +277,25 @@ export function ReportsFilters({
                 <SelectItem value="last-year">Año anterior</SelectItem>
                 <SelectItem value="last-30">Últimos 30 días</SelectItem>
                 <SelectItem value="custom">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reservationType">Tipo de reserva</Label>
+            <Select
+              value="commercial" // Default to commercial for now, as the state was removed
+              onValueChange={() => {}}
+            >
+              <SelectTrigger id="reservationType">
+                <SelectValue placeholder="Reservas comerciales" />
+              </SelectTrigger>
+              <SelectContent>
+                {reservationTypeOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

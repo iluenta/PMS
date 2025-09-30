@@ -63,6 +63,7 @@ import {
   getVatConfigFromReservation,
   VatConfig
 } from "@/lib/utils/financial"
+import { useReservationTypes } from "@/hooks/useReservationTypes"
 
 export default function Bookings() {
 
@@ -75,6 +76,7 @@ export default function Bookings() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
   const [reservationPayments, setReservationPayments] = useState<{[key: string]: any[]}>({})
   const [propertyChannels, setPropertyChannels] = useState<PropertyChannelWithDetails[]>([])
+  const { types: reservationTypes, loading: reservationTypesLoading } = useReservationTypes()
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -633,6 +635,8 @@ export default function Bookings() {
             onSave={fetchData}
             reservationPayments={memoizedReservationPayments}
             calculatePaymentInfo={calculatePaymentInfo}
+            reservationTypes={reservationTypes}
+            reservationTypesLoading={reservationTypesLoading}
           />
         </Dialog>
       </div>
@@ -943,6 +947,8 @@ function BookingDialog({
   onSave,
   reservationPayments,
   calculatePaymentInfo,
+  reservationTypes,
+  reservationTypesLoading,
 }: {
   booking: Booking | null
   properties: Property[]
@@ -950,20 +956,23 @@ function BookingDialog({
   onClose: () => void
   onSave: () => void
   reservationPayments?: {[key: string]: any[]}
-  calculatePaymentInfo: (booking: Booking, payments?: any[]) => { 
-    requiredAmount: number; 
-    paymentStatus: string; 
-    totalPayments: number; 
-    pendingAmount: number;
+  calculatePaymentInfo: (booking: Booking, payments?: any[]) => {
+    requiredAmount: number
+    paymentStatus: string
+    totalPayments: number
+    pendingAmount: number
     vatInfo: {
-      applyVat: boolean;
-      vatPercent: number;
-      vatAmount: number;
+      applyVat: boolean
+      vatPercent: number
+      vatAmount: number
     }
   }
+  reservationTypes: string[]
+  reservationTypesLoading: boolean
 }) {
   const { selectedProperty } = useProperty()
   const { user, loading: authLoading } = useAuth()
+  const { toast } = useToast()
   
   // Debug: verificar que el contexto de autenticación funciona en BookingDialog
   // Comentado temporalmente para evitar spam en consola
@@ -1006,6 +1015,7 @@ function BookingDialog({
   const [calculatingCommissions, setCalculatingCommissions] = useState(false)
   const [dateError, setDateError] = useState<string>("")
   const [externalIdError, setExternalIdError] = useState<string>("")
+  const [availabilityError, setAvailabilityError] = useState<string>("")
   const [propertyError, setPropertyError] = useState<string>("")
   const [commissionPercentages, setCommissionPercentages] = useState<{
     sale: number | null;
@@ -1077,6 +1087,7 @@ function BookingDialog({
         payment_status: (booking as any).payment_status || "pending",
         channel_commission: booking.channel_commission || 0,
         collection_commission: booking.collection_commission || 0,
+        reservation_type: (booking as any).reservation_type || "commercial",
       }
       setFormData(formDataToSet)
     } else {
@@ -1107,6 +1118,7 @@ function BookingDialog({
         payment_status: "pending",
         channel_commission: 0,
         collection_commission: 0,
+        reservation_type: "commercial",
       })
     }
   }, [booking, selectedProperty])
@@ -1184,6 +1196,93 @@ function BookingDialog({
     }
   }
 
+  const checkAvailability = async (
+    propertyId: string,
+    checkIn: string,
+    checkOut: string,
+    excludeReservationId?: string
+  ): Promise<{ isAvailable: boolean; message: string }> => {
+    try {
+      const checkInDate = new Date(checkIn)
+      const checkOutDate = new Date(checkOut)
+
+      // Normalizar fechas al inicio del día
+      const normalizedCheckIn = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate())
+      const normalizedCheckOut = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate())
+
+      // Consultar todas las reservas para esta propiedad
+      const { data: existingReservations, error } = await supabase
+        .from("reservations")
+        .select("id, check_in, check_out, status, reservation_type, guest")
+        .eq("property_id", propertyId)
+        .neq("status", "cancelled")
+
+      if (error) throw error
+
+      // Filtrar reservas que bloquean disponibilidad
+      const blockingReservations = (existingReservations || []).filter(reservation => {
+        // Excluir la reserva actual si estamos editando
+        if (excludeReservationId && reservation.id === excludeReservationId) {
+          return false
+        }
+
+        // owner_stay y blocked siempre bloquean
+        if (reservation.reservation_type === "owner_stay" || reservation.reservation_type === "blocked") {
+          return true
+        }
+
+        // Reservas comerciales confirmadas bloquean
+        if ((!reservation.reservation_type || reservation.reservation_type === "commercial") && reservation.status === "confirmed") {
+          return true
+        }
+
+        return false
+      })
+
+      // Verificar si hay solapamiento
+      for (const reservation of blockingReservations) {
+        const existingCheckIn = new Date(reservation.check_in)
+        const existingCheckOut = new Date(reservation.check_out)
+
+        // Normalizar fechas
+        const normalizedExistingCheckIn = new Date(existingCheckIn.getFullYear(), existingCheckIn.getMonth(), existingCheckIn.getDate())
+        const normalizedExistingCheckOut = new Date(existingCheckOut.getFullYear(), existingCheckOut.getMonth(), existingCheckOut.getDate())
+
+        // Verificar solapamiento
+        const hasOverlap = (
+          (normalizedCheckIn >= normalizedExistingCheckIn && normalizedCheckIn < normalizedExistingCheckOut) ||
+          (normalizedCheckOut > normalizedExistingCheckIn && normalizedCheckOut <= normalizedExistingCheckOut) ||
+          (normalizedCheckIn <= normalizedExistingCheckIn && normalizedCheckOut >= normalizedExistingCheckOut)
+        )
+
+        if (hasOverlap) {
+          const guestName = reservation.guest?.name || "Un huésped"
+          const typeLabel = reservation.reservation_type === "owner_stay" 
+            ? "Uso propietario" 
+            : reservation.reservation_type === "blocked" 
+              ? "Bloqueo" 
+              : "Reserva comercial"
+          
+          return {
+            isAvailable: false,
+            message: `Las fechas seleccionadas no están disponibles. Existe un conflicto con: ${typeLabel} (${guestName}) del ${new Date(reservation.check_in).toLocaleDateString('es-ES')} al ${new Date(reservation.check_out).toLocaleDateString('es-ES')}`
+          }
+        }
+      }
+
+      return {
+        isAvailable: true,
+        message: "Fechas disponibles"
+      }
+    } catch (error) {
+      console.error("Error checking availability:", error)
+      return {
+        isAvailable: false,
+        message: "Error al verificar disponibilidad. Por favor, intenta de nuevo."
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -1193,14 +1292,44 @@ function BookingDialog({
       const end = new Date(formData.check_out)
       
       if (end <= start) {
-        setDateError("La fecha de check-out debe ser posterior a la fecha de check-in")
+        const errorMsg = "La fecha de check-out debe ser posterior a la fecha de check-in"
+        setDateError(errorMsg)
+        toast({
+          title: "⚠️ Error de validación",
+          description: errorMsg,
+          variant: "destructive",
+        })
         return
       }
     }
 
     // Validar ID de reserva externa cuando el canal no es "Propio"
     if (formData.booking_source !== "Propio" && !formData.external_id?.trim()) {
-      setExternalIdError("El ID de reserva externa es obligatorio cuando el canal no es 'Propio'")
+      const errorMsg = "El ID de reserva externa es obligatorio cuando el canal no es 'Propio'"
+      setExternalIdError(errorMsg)
+      toast({
+        title: "⚠️ Campo requerido",
+        description: errorMsg,
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validar disponibilidad de fechas
+    const availabilityCheck = await checkAvailability(
+      formData.property_id,
+      formData.check_in,
+      formData.check_out,
+      booking?.id // Excluir la reserva actual si estamos editando
+    )
+
+    if (!availabilityCheck.isAvailable) {
+      setAvailabilityError(availabilityCheck.message)
+      toast({
+        title: "⚠️ Fechas no disponibles",
+        description: availabilityCheck.message,
+        variant: "destructive",
+      })
       return
     }
 
@@ -1339,12 +1468,17 @@ function BookingDialog({
         external_source: formData.booking_source,
         external_id: formData.external_id || null,
         person_id: personId,
-        tenant_id: user?.tenant_id // Agregar tenant_id del usuario autenticado
+        tenant_id: user?.tenant_id,
+        reservation_type: (formData as any).reservation_type || "commercial"
       }
 
       // Ensure we have a valid property_channel_id
       if (!property_channel_id) {
-        alert("Error: No se pudo encontrar o crear el canal de distribución. Por favor, verifica la configuración del canal.")
+        toast({
+          title: "❌ Error de configuración",
+          description: "No se pudo encontrar o crear el canal de distribución. Por favor, verifica la configuración del canal.",
+          variant: "destructive",
+        })
         return
       }
 
@@ -1357,9 +1491,18 @@ function BookingDialog({
         
         if (error) {
           console.error("Error updating reservation:", error)
-          alert(`Error al actualizar la reserva: ${(error as Error).message}`)
+          toast({
+            title: "❌ Error al actualizar",
+            description: `No se pudo actualizar la reserva: ${(error as Error).message}`,
+            variant: "destructive",
+          })
           return
         }
+        
+        toast({
+          title: "✅ Reserva actualizada",
+          description: "La reserva se ha actualizado correctamente",
+        })
         onSave()
         onClose()
       } else {
@@ -1370,14 +1513,27 @@ function BookingDialog({
         
         if (error) {
           console.error("Error creating reservation:", error)
-          alert(`Error al crear la reserva: ${(error as Error).message}`)
+          toast({
+            title: "❌ Error al crear",
+            description: `No se pudo crear la reserva: ${(error as Error).message}`,
+            variant: "destructive",
+          })
           return
         }
+        
+        toast({
+          title: "✅ Reserva creada",
+          description: "La reserva se ha creado correctamente",
+        })
         onSave()
         onClose()
       }
     } catch (error) {
-      alert(`Error al guardar la reserva: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+      toast({
+        title: "❌ Error inesperado",
+        description: `Error al guardar la reserva: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        variant: "destructive",
+      })
     }
   }
 
@@ -1427,6 +1583,13 @@ function BookingDialog({
       setExternalIdError("")
     }
   }, [formData.booking_source, externalIdError])
+
+  // Limpiar error de disponibilidad cuando cambien las fechas
+  useEffect(() => {
+    if (availabilityError && (formData.check_in || formData.check_out)) {
+      setAvailabilityError("")
+    }
+  }, [formData.check_in, formData.check_out, availabilityError])
 
   // Cargar porcentajes de comisión cuando cambie el canal
   // Para nuevas reservas Y para modificación (ambos casos)
@@ -1538,6 +1701,18 @@ function BookingDialog({
       return 0
     }
   }
+
+  const fallbackReservationTypes = ["commercial", "owner_stay", "blocked"]
+  const reservationTypeOptions = (reservationTypes.length > 0 ? reservationTypes : fallbackReservationTypes).map(type => ({
+    value: type,
+    label: type === "commercial"
+      ? "Reserva comercial"
+      : type === "owner_stay"
+        ? "Uso propietario"
+        : type === "blocked"
+          ? "Bloqueo"
+          : type
+  }))
 
   return (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1671,6 +1846,13 @@ function BookingDialog({
                   {dateError}
                 </div>
               )}
+
+              {/* Mostrar error de disponibilidad */}
+              {availabilityError && (
+                <div className="text-red-500 text-sm mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <strong>⚠️ Conflicto de fechas:</strong> {availabilityError}
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">Número de noches</Label>
@@ -1765,6 +1947,26 @@ function BookingDialog({
                     <SelectItem value="cancelled">Cancelada</SelectItem>
                     <SelectItem value="completed">Completada</SelectItem>
                     <SelectItem value="reserved">Reservada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reservation_type" className="text-sm font-medium text-gray-700">Tipo de reserva</Label>
+                  <Select
+                    value={(formData as any).reservation_type || "commercial"}
+                    onValueChange={(value) => setFormData(prev => ({ ...(prev as any), reservation_type: value }))}
+                    disabled={reservationTypesLoading}
+                  >
+                  <SelectTrigger className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reservationTypeOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
